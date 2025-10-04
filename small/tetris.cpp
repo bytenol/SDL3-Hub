@@ -27,8 +27,8 @@
 int score;
 float F_TILESIZE;
 size_t TILE_SIZE;
-constexpr size_t ROW_SIZE = 20;
-constexpr size_t COL_SIZE = 15;
+constexpr int ROW_SIZE = 20;
+constexpr int COL_SIZE = 10;
 float t0, t1, moveTimeStep, elapsedTime;
 
 
