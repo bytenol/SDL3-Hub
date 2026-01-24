@@ -52,6 +52,8 @@ void setupBlock(const float& w, const float& h, const float& angle, const float&
 bool processEvent(SDL_Event& evt);
 void renderPolygon(phy::polygon& polygon);
 void drawFilledCircle(SDL_Renderer* r, float px, float py, float radius);
+bool pointInRect(const SDL_FPoint& point, const SDL_FRect& rect);
+bool rectToRectIntersect(const SDL_FRect& a, const SDL_FRect& b);
 
 
 int selected = 0;
@@ -59,6 +61,99 @@ phy::polygon* selectedPolygon = nullptr;
 std::vector<phy::polygon> polygons;
 std::vector<phy::LineRb> walls;
 std::vector<collisionInfo> collisionInfos;
+
+template<typename T>
+class Quadtree {
+
+    public:
+        SDL_FRect boundary;
+        int capacity = 4;
+        std::vector<T> objects;
+        bool isDivided = false;
+
+        std::vector<Quadtree> children;
+
+        Quadtree() = default;
+
+        Quadtree(const SDL_FRect& r, int maxObj = 4) {
+            boundary = r;
+            capacity = maxObj;
+        }
+
+        void insert(const T& object) {
+            if(!pointInRect(SDL_FPoint{ object->pos.x, object->pos.y }, boundary)) return;
+
+            if(objects.size() < capacity) {
+                objects.emplace_back(object);
+            } else {
+                if(!isDivided) {
+                    isDivided = true;
+                    const float wHalf = boundary.w / 2;
+                    const float hHalf = boundary.h / 2;
+                    children.push_back(Quadtree({ boundary.x, boundary.y, wHalf, hHalf }, capacity));
+                    children.push_back(Quadtree({ boundary.x + wHalf, boundary.y, wHalf, hHalf }, capacity));
+                    children.push_back(Quadtree({ boundary.x, boundary.y + hHalf, wHalf, hHalf }, capacity));
+                    children.push_back(Quadtree({ boundary.x + wHalf, boundary.y + hHalf, wHalf, hHalf }, capacity));
+
+                    for(auto it = objects.begin(); it != objects.end(); it++) {
+                        for(int i = 0; i < children.size(); i++) {
+                            auto& child = children[i];
+                            child.insert(*it);
+                        }
+                    }
+
+                    objects.clear();
+
+                }   // if !isDivided ends
+            }
+
+            if(isDivided) {
+                for(auto& child: children) {
+                    child.insert(object);
+                }
+            }
+
+        }
+
+        std::vector<T> findObject(const decltype(boundary)& range) {
+            if(!rectToRectIntersect(boundary, range)) return {};
+
+            std::vector<T> res;
+
+            if(!isDivided) {
+                for(auto& object: objects) {
+                    if(pointInRect({ object->pos.x, object->pos.y }, range)) res.emplace_back(object);
+                }
+                return res;
+            }
+
+            else {
+                for(auto& child: children) {
+                    auto pt = child.findObject(range);
+                    res.insert(res.begin(), pt.begin(), pt.end());
+                }
+            }
+
+            return res;
+        }
+
+        size_t size() const {
+            return objects.size();
+        }
+
+        void render(SDL_Renderer* renderer) {
+            SDL_RenderRect(renderer, &boundary);
+            for(auto& child: children) 
+                child.render(renderer);
+
+            for(auto& object: objects) {
+                drawFilledCircle(renderer, object->pos.x, object->pos.y, 1);
+            }
+        }
+};
+
+Quadtree<phy::polygon*> qtree;
+
 
 
 void init()
@@ -79,7 +174,7 @@ void init()
 	// for(int i = 0; i < 150; i++) {
 	// 	const float sx = randRange(6, 30);
 	// 	const float sy = randRange(6, 30);
-	// 	setupBlock(sx, sy, randRange(0, 360), randRange(sx*2, W - sx*2), randRange(0, 90));
+	// 	setupBlock(sx, sy, randRange(0, 360), randRange(sx, W), randRange(0, 90));
 	// }
 
 	// setupBlock(50, 60, 0, 200, 0);
@@ -165,6 +260,21 @@ void render(SDL_Renderer* renderer)
 
 	for(auto& info: collisionInfos) info.render(renderer);
 
+	// qtree stuffs
+	// SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+	// qtree.render(renderer);
+
+	// SDL_FRect selectedRect { polygons[0].pos.x - 50, polygons[0].pos.y - 50, 100, 100 };
+	// auto ranged = qtree.findObject(selectedRect);
+
+	// SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+    // for(auto& polygon: ranged) {
+    //     drawFilledCircle(renderer, polygon->pos.x, polygon->pos.y, 1);
+    // } 
+
+	// SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+	// SDL_RenderRect(renderer, &selectedRect);
+
 }
 
 
@@ -172,19 +282,25 @@ void update(float dt, SDL_Renderer* renderer)
 {
 	selectedPolygon = &(polygons[selected % polygons.size()]);
 	// collisionInfos.clear();
+
+	// std::cout << dt << std::endl;
+
+	qtree = Quadtree<phy::polygon*>({ 0, 0, W, H }, 4);
+    for(auto& polygon: polygons) qtree.insert(&polygon);
 	
 	for(auto& polygon: polygons) {
-
+		auto ranged = qtree.findObject({ polygon.pos.x - 50, polygon.pos.y - 50, 100, 100 });
+		// auto ranged = qtree.findObject({ 0, 0, W, H });
 		checkWallBounce(polygon);
 
 		// collision detection
-		for(auto& polygon2: polygons) {
-			if(&polygon != &polygon2) {
+		for(auto& polygon2: ranged) {
+			if(&polygon != polygon2) {
 				collisionInfo info;
-				if(checkPolygonCollision(polygon, polygon2, info)) {
+				if(checkPolygonCollision(polygon, *polygon2, info)) {
 					auto displ = info.intersection - info.vertex;
 					polygon.pos -= displ * 0.5;
-					polygon2.pos += displ * 0.5;
+					polygon2->pos += displ * 0.5;
 					// checkWallBounce
 					checkWallBounce(polygon);
 
@@ -193,19 +309,19 @@ void update(float dt, SDL_Renderer* renderer)
 					auto rp1 = info.rp1; //polygon.vertices[i].rotate(obj1.rotation);
 					auto rp2 = info.rp2; //obj1.pos2D.add(rp1).subtract(obj2.pos2D);
 					auto vp1 = polygon.vel + rp1.perp(-polygon.angVelo*rp1.length());
-					auto vp2 = polygon2.vel + rp2.perp(-polygon2.angVelo*rp2.length());
+					auto vp2 = polygon2->vel + rp2.perp(-polygon2->angVelo*rp2.length());
 					auto vr = vp1 - vp2;
 					auto invm1 = 1/polygon.mass;
-					auto invm2 = 1/polygon2.mass;
+					auto invm2 = 1/polygon2->mass;
 					auto invI1 = 1/polygon.im;
-					auto invI2 = 1/polygon2.im;
+					auto invI2 = 1/polygon2->im;
 					auto rp1Xn = rp1.crossProduct(normal);
 					auto rp2Xn = rp1.crossProduct(normal);						
 					auto impulse = -(1+cr)*vr.dotProduct(normal)/(invm1 + invm2 + rp1Xn*rp1Xn*invI1 + rp2Xn*rp2Xn*invI2); 
 					polygon.vel = polygon.vel + normal * (impulse*invm1);
 					polygon.angVelo += rp1.crossProduct(normal)*impulse*invI1;
-					polygon2.vel = polygon2.vel - normal * (impulse*invm2);
-					polygon2.angVelo += -rp2.crossProduct(normal) * impulse * invI2;
+					polygon2->vel = polygon2->vel - normal * (impulse*invm2);
+					polygon2->angVelo += -rp2.crossProduct(normal) * impulse * invI2;
 				}
 			}
 		}	// collision detection ends
@@ -438,6 +554,17 @@ void setupCircle(const float& r, const float& angle, const float& x, const float
 	polygons.push_back(circle);
 }
 
+
+bool pointInRect(const SDL_FPoint &point, const SDL_FRect &rect)
+{
+    return (point.x >= rect.x && point.x <= rect.x + rect.w && 
+        point.y >= rect.y && point.y <= rect.y + rect.h);
+}
+
+bool rectToRectIntersect(const SDL_FRect &a, const SDL_FRect &b)
+{
+    return (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y);
+}
 
 float randRange(const float& min, const float& max)
 {

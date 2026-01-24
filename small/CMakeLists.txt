@@ -54,3 +54,12 @@ target_link_libraries(rigidPhysics PRIVATE ideps)
 
 add_executable(polygonCollision polygonCollision.cpp)
 target_link_libraries(polygonCollision PRIVATE ideps)
+
+add_executable(quadtree quadtree.cpp)
+target_link_libraries(quadtree PRIVATE ideps)
+
+add_executable(ballPhysics ballPhysics.cpp)
+target_link_libraries(ballPhysics PRIVATE ideps)
+
+add_executable(mode7 mode7.cpp)
+target_link_libraries(mode7 PRIVATE ideps)
