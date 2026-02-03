@@ -329,3 +329,4 @@ void reset()
 
 	if (!nextIsPlayer) AIPlay();
 }
+

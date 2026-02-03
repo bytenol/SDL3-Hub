@@ -7,6 +7,7 @@
 #include <memory>
 
 #include "./include/phy/geometry.h"
+#include "./include/phy/quadtree.h"
 
 using namespace std;
 
@@ -17,174 +18,41 @@ std::chrono::high_resolution_clock::duration t0;
 
 float randRange(const float& min, const float& max);
 bool processEvent(SDL_Event& evt);
+void makeBlock(const float& x, const float& y, const float& w, const float& h);
 void drawFilledCircle(SDL_Renderer* r, float px, float py, float radius);
+
+template<typename T>
+void renderQuadtree(SDL_Renderer* renderer, const phy::Quadtree<T>& qtree);
 
 bool pointInRect(const SDL_FPoint& point, const SDL_FRect& rect);
 bool rectToRectIntersect(const SDL_FRect& a, const SDL_FRect& b);
 
-
-template<typename T>
-class Quadtree {
-
-    phy::Rect2D boundary;
-    int capacity = 4;
-    std::vector<T*> objects;
-    bool isDivided = false;
-    std::vector<std::unique_ptr<Quadtree>> children;
-
-    public:
-
-        Quadtree() = default;
-
-        void resize(const phy::Rect2D& b, const int& c) {
-            boundary = b;
-            capacity = c;
-            objects.clear();
-            isDivided = false;
-            children.clear();
-        }
-
-        bool insert(T& object) {
-            if(object.getArea() > boundary.getArea())
-                return false;
-
-            objects.push_back(&object);
-
-        //     if(!pointInRect(point, boundary)) return;
-
-        //     if(objects.size() < capacity) {
-        //         objects.emplace_back(point);
-        //     } else {
-        //         if(!isDivided) {
-        //             isDivided = true;
-        //             const float wHalf = boundary.w / 2;
-        //             const float hHalf = boundary.h / 2;
-        //             children.push_back(Quadtree({ boundary.x, boundary.y, wHalf, hHalf }, capacity));
-        //             children.push_back(Quadtree({ boundary.x + wHalf, boundary.y, wHalf, hHalf }, capacity));
-        //             children.push_back(Quadtree({ boundary.x, boundary.y + hHalf, wHalf, hHalf }, capacity));
-        //             children.push_back(Quadtree({ boundary.x + wHalf, boundary.y + hHalf, wHalf, hHalf }, capacity));
-
-        //             for(auto it = objects.begin(); it != objects.end(); it++) {
-        //                 for(int i = 0; i < children.size(); i++) {
-        //                     auto& child = children[i];
-        //                     child.insert(*it);
-        //                 }
-        //             }
-
-        //             objects.clear();
-
-        //         }   // if !isDivided ends
-        //     }
-
-        //     if(isDivided) {
-        //         for(auto& child: children) {
-        //             child.insert(point);
-        //         }
-        //     }
-
-            return false;
-        }
-
-        std::vector<T> findObject(const decltype(boundary)& range) {
-            // if(!rectToRectIntersect(boundary, range)) return {};
-
-            // std::vector<T> res;
-
-            // if(!isDivided) {
-            //     for(auto& pt: objects) {
-            //         if(pointInRect(pt, range)) res.emplace_back(pt);
-            //     }
-            //     return res;
-            // }
-
-            // else {
-            //     for(auto& child: children) {
-            //         auto pt = child.findObject(range);
-            //         res.insert(res.begin(), pt.begin(), pt.end());
-            //     }
-            // }
-
-            // return res;
-        }
-
-        size_t size() const {
-            return objects.size();
-        }
-
-        void render(SDL_Renderer* renderer) {
-            SDL_FRect rect{ boundary.pos.x, boundary.pos.y, boundary.size.x, boundary.size.y };
-            SDL_RenderRect(renderer, &rect);
-
-            std::cout << objects.size() << std::endl;
-            for(auto& object: objects) {
-                // rect.x = object->pos.x;
-                // rect.y = object->pos.y;
-                // rect.w = object->size.x;
-                // rect.h = object->size.y;
-                // SDL_RenderRect(renderer, &rect);
-                drawFilledCircle(renderer, object->pos.x, object->pos.y, 5);
-            }
-
-            for(auto& child: children) 
-                child->render(renderer);
-        }
-};
-
-Quadtree<phy::Rect2D> qtree;
 std::vector<phy::Rect2D> objects;
-std::vector<SDL_FColor> colors;
+std::vector<SDL_Color> colors;
+phy::Quadtree<phy::Rect2D> qtree;
 
 
 void init()
 {
-    qtree.resize(phy::Rect2D{ {0, 0}, {W, H} }, 4);
-    
-    for(int i = 0; i < 4; i++) {
-        const float w = randRange(20, 40);
-        const float h = randRange(20, 40);
-        const float x = randRange(w, W - w);
-        const float y = randRange(h, H - h);
-        phy::Rect2D rect{ {x, y}, {w, h} };
-        objects.push_back(rect);
-        qtree.insert(objects[i]);
-        colors.push_back({ randRange(0, 255), randRange(0, 255), randRange(0, 255) });
-    }
 
-    std::cout << qtree.size() << " -> " << objects.size() << std::endl;
+    for(int i = 0; i < 4; i++) {
+        makeBlock(randRange(50, W - 100), randRange(50, H - 100), randRange(20, 50), randRange(20, 50));
+    }
 
     t0 = std::chrono::high_resolution_clock::now().time_since_epoch();
 }
 
 void render(SDL_Renderer* renderer)
 {
-
-    for(int i = 0; i < objects.size(); i++) {
-        const auto& r = objects[i];
-        const auto& color = colors[i];
-        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 255);
-        SDL_FRect rect{ r.pos.x, r.pos.y, r.size.x, r.size.y };
-        SDL_RenderFillRect(renderer, &rect);
-    }
-
-
-    // render quadtree
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    qtree.render(renderer);
-
-    // SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-    // SDL_RenderRect(renderer, &rect);
-
-    // auto ranged = qtree.findObject(rect);
-    // SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-    // for(auto& point: ranged) {
-    //     drawFilledCircle(renderer, point.x, point.y, 1);
-    // } 
+    renderQuadtree(renderer, qtree);
 }
 
 
 void update(float dt, SDL_Renderer* renderer)
 {
-   
+    qtree.resize(phy::Rect2D{ {0, 0}, {W, H}}, 4);
+
+    for(auto& object: objects) qtree.insert(&object);
 }
 
 bool processEvent(SDL_Event& evt) {
@@ -205,7 +73,7 @@ bool processEvent(SDL_Event& evt) {
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
             const float px = evt.motion.x;
             const float py = evt.motion.y;
-            // qtree.insert({px, py});
+            makeBlock(px, py, randRange(20, 50), randRange(20, 50));
             break;
 	}
 	return false;
@@ -306,4 +174,46 @@ bool pointInRect(const SDL_FPoint &point, const SDL_FRect &rect)
 bool rectToRectIntersect(const SDL_FRect &a, const SDL_FRect &b)
 {
     return (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y);
+}
+
+
+template<typename T>
+void renderQuadtree(SDL_Renderer* renderer, const phy::Quadtree<T>& qtree)
+{
+    SDL_FRect rect;
+    auto& allObjects = qtree.getObjects();
+
+    for(int i = 0; i < allObjects.size(); i++) 
+    {
+        auto& object = allObjects[i];
+        auto& color = colors[i];
+        rect.x = object->pos.x;
+        rect.y = object->pos.y;
+        rect.w = object->size.x;
+        rect.h = object->size.y;
+        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 255);
+        SDL_RenderFillRect(renderer, &rect);    
+    }
+
+
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    auto& boundary = qtree.getBoundary();
+    rect = { boundary.pos.x, boundary.pos.y, boundary.size.x, boundary.size.y };
+    SDL_RenderRect(renderer, &rect);
+
+    for(auto& child: qtree.getChildren()) {
+        renderQuadtree(renderer, *child);
+    }
+
+}
+
+
+void makeBlock(const float& x, const float& y, const float& w, const float& h)
+{
+    phy::Rect2D rect;
+    rect.pos.x = x;
+    rect.pos.y = y;
+    rect.size = { w, h };
+    objects.push_back(rect);
+    colors.push_back(SDL_Color{ (unsigned char)randRange(0, 255), (unsigned char)randRange(0, 255), (unsigned char)randRange(0, 255) });
 }

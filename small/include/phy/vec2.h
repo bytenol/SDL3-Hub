@@ -79,6 +79,27 @@ namespace phy {
             return { x / l, y / l };
         }
 
+        vec2 para(const float& u, const bool& positive = true) {
+            float l = length();
+            auto r = *this * (u / l);
+            return r * (positive ? 1: -1);
+        }
+
+        vec2 project(const vec2& v) {
+            return para(projection(v));
+        }
+
+        float projection(const vec2& vec) {
+            auto  l = this->length();
+            auto lv = std::hypot(vec.x, vec.y);
+            if(l == 0 || lv == 0) return 0.0f;
+            return dotProduct(vec) / lv;
+        }
+  
+        static vec2 fromAngle(const float& angleInRadians, const float& scale = 1) {
+            return { std::cos(angleInRadians) * scale, std::sin(angleInRadians) * scale };
+        }
+
     };
 
 }

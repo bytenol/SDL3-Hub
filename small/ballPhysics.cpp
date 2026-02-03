@@ -154,17 +154,17 @@ class Ball {
         }
 
         void update(const float& dt, std::vector<Ball*>& balls) {
-            force.x = 0;
-            force.y = 0;
-            checkWallBounce();
-            ballToBallCollision(balls);
-            pos += vel * dt;
-            vec2 friction{ vel * -0.2f };
-            vec2 weight { 0, mass * g };
+            // force.x = 0;
+            // force.y = 0;
+            // checkWallBounce();
+            // ballToBallCollision(balls);
+            // pos += vel * dt;
+            // vec2 friction{ vel * -0.2f };
+            // vec2 weight { 0, mass * g };
 
-            force += weight + friction;
-            acc = force * (1/mass);
-            vel += acc * dt;
+            // force += weight + friction;
+            // acc = force * (1/mass);
+            // vel += acc * dt;
         }
 
         void render(SDL_Renderer* renderer) {
@@ -174,12 +174,11 @@ class Ball {
             drawFilledCircle(renderer, pos.x, pos.y, radius);
         }
 
-    private:
+    public:
         void checkWallBounce() {
             if(pos.y + radius > H) {
                 pos.y = H - radius;
                 vel.y *= -0.8f;
-                force -= { 0, mass * g };
             }
 
             if(pos.x - radius < 0) {
@@ -193,7 +192,9 @@ class Ball {
             }
         }
 
+        public:
         void ballToBallCollision(std::vector<Ball*>& balls) {
+
             for(auto& ball: balls) {
                 if(ball != this) {
                     auto dist = ball->pos - pos;
@@ -238,7 +239,7 @@ void init()
 {
     balls.clear();
 
-    for(int i = 0; i < 200; i++) {
+    for(int i = 0; i < 100; i++) {
         const float radius = randRange(10, 20);
         balls.push_back({ {randRange(0, W), randRange(0, 90)}, radius, radius * 0.5f });
     }
@@ -263,9 +264,22 @@ void physicsProcess(const float& dt)
     qtree = Quadtree<Ball*>({ 0, 0, W, H }, 4);
     for(auto& ball: balls) qtree.insert(&ball);
 
-    for(auto& ball: balls) {
+    std::vector<Ball*> collidingBall;
+
+    for(int i = 0; i < 2; i++)
+    for(int i = 0; i < balls.size(); i++) {
+        auto& ball = balls[i];
         auto ranged = qtree.findObject({ ball.pos.x - 50, ball.pos.y - 50, 100, 100 });
-        ball.update(dt, ranged);
+        ball.ballToBallCollision(ranged);
+        ball.checkWallBounce();
+        
+    }
+
+    for(auto& ball: balls) {
+        ball.pos += ball.vel * dt;
+        ball.force = { 0, ball.mass * 10 };
+        ball.acc = ball.force * (1/ball.mass);
+        ball.vel += ball.acc * dt;
     }
         
 }

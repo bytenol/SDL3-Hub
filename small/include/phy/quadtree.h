@@ -3,6 +3,10 @@
 
 #include <vector>
 
+#include "vec2.h"
+#include "geometry.h"
+
+#include <iostream>
 
 
 namespace phy {
@@ -10,93 +14,115 @@ namespace phy {
     template<typename T>
     class Quadtree {
 
-        int capacity = 4;
-        
-        SDL_FRect boundary;
+        int capacity, maxDepth, minNodeSize;
+        bool isDivided = false;
+        std::vector<std::shared_ptr<Quadtree>> children;
+        std::vector<T*> objects;
+        Rect2D boundary;
 
         public:
-            std::vector<T> objects;
-            bool isDivided = false;
-
-            std::vector<Quadtree> children;
 
             Quadtree() = default;
-
-            Quadtree(const SDL_FRect& r, int maxObj = 4) {
-                boundary = r;
-                capacity = maxObj;
+            
+            void resize(const Rect2D& b, const int& c, const int& depth = 4, const int& minSize = 30)
+            {
+                capacity = c;
+                boundary = b;
+                maxDepth = depth;
+                minNodeSize = minSize;
+                isDivided = false;
+                children.clear();
+                objects.clear();
             }
 
-            void insert(const T& point) {
-                if(!pointInRect(point, boundary)) return;
+            bool insert(T* object) {
+                if(!rectFitCompletely(object, boundary))
+                    return false;
 
-                if(objects.size() < capacity) {
-                    objects.emplace_back(point);
+                if(objects.size() < capacity && !children.size()) {
+                    objects.emplace_back(object);
+                    return true;
                 } else {
-                    if(!isDivided) {
-                        isDivided = true;
-                        const float wHalf = boundary.w / 2;
-                        const float hHalf = boundary.h / 2;
-                        children.push_back(Quadtree({ boundary.x, boundary.y, wHalf, hHalf }, capacity));
-                        children.push_back(Quadtree({ boundary.x + wHalf, boundary.y, wHalf, hHalf }, capacity));
-                        children.push_back(Quadtree({ boundary.x, boundary.y + hHalf, wHalf, hHalf }, capacity));
-                        children.push_back(Quadtree({ boundary.x + wHalf, boundary.y + hHalf, wHalf, hHalf }, capacity));
+                    if(boundary.size.x >= minNodeSize && boundary.size.y >= minNodeSize && !children.size()) 
+                        subdivide();
+                }
+                
+                // bool isFit = false;
+                // if(children.size()) {
+                //     for(auto& child: children) {
+                //         if(child->insert(object)) {
+                //             isFit = true;
+                //             break;
+                //         }
+                //     }
 
-                        for(auto it = objects.begin(); it != objects.end(); it++) {
-                            for(int i = 0; i < children.size(); i++) {
-                                auto& child = children[i];
-                                child.insert(*it);
-                            }
+                //     if(!isFit) objects.emplace_back(object);
+
+                // } else {
+                //     objects.emplace_back(object);
+                //     return true;
+                // }
+
+
+                
+                return true;
+            }
+
+            const decltype(objects)& getObjects() const {
+                return objects;
+            }
+
+            const decltype(children)& getChildren() const {
+                return children;
+            }
+
+            const Rect2D& getBoundary() const {
+                return boundary;
+            }
+
+        private:
+            void subdivide() {
+                children.clear();
+                children.emplace_back(new Quadtree());
+                children.emplace_back(new Quadtree());
+                children.emplace_back(new Quadtree());
+                children.emplace_back(new Quadtree());
+
+                const float hw = boundary.size.x * 0.5;
+                const float hh = boundary.size.y * 0.5;
+                children[0]->resize(phy::Rect2D{ {boundary.pos.x, boundary.pos.y}, { hw, hh } }, capacity, maxDepth, minNodeSize);
+                children[1]->resize(phy::Rect2D{ {boundary.pos.x + hw, boundary.pos.y}, { hw, hh } }, capacity, maxDepth, minNodeSize);
+                children[2]->resize(phy::Rect2D{ {boundary.pos.x, boundary.pos.y + hh}, { hw, hh } }, capacity, maxDepth, minNodeSize);
+                children[3]->resize(phy::Rect2D{ {boundary.pos.x + hw, boundary.pos.y + hh}, { hw, hh } }, capacity, maxDepth, minNodeSize);
+
+                redistributeObject();
+
+                std::cout << objects.size() << std::endl;
+
+                isDivided = true;
+            }
+
+            void redistributeObject() {
+                for(auto it = objects.begin(); it != objects.end(); ) {
+                    auto& object = *it;
+                    bool moved = false;
+
+                    for(auto& child: children) {
+                        if(rectFitCompletely(object, child->boundary)) {
+                            child->objects.emplace_back(object);
+                            it = objects.erase(it);
+                            break;
                         }
-
-                        objects.clear();
-
-                    }   // if !isDivided ends
-                }
-
-                if(isDivided) {
-                    for(auto& child: children) {
-                        child.insert(point);
                     }
-                }
 
+                    if(!moved) ++it;
+                }
             }
 
-            std::vector<T> findObject(const decltype(boundary)& range) {
-                if(!rectToRectIntersect(boundary, range)) return {};
-
-                std::vector<T> res;
-
-                if(!isDivided) {
-                    for(auto& pt: objects) {
-                        if(pointInRect(pt, range)) res.emplace_back(pt);
-                    }
-                    return res;
-                }
-
-                else {
-                    for(auto& child: children) {
-                        auto pt = child.findObject(range);
-                        res.insert(res.begin(), pt.begin(), pt.end());
-                    }
-                }
-
-                return res;
+            inline constexpr bool rectFitCompletely(T* rect, const phy::Rect2D& boundary) {
+                return rect->pos.x >= boundary.pos.x && (rect->pos.x + rect->size.x) <= boundary.pos.x + boundary.size.x
+                    && rect->pos.y >= boundary.pos.y && (rect->pos.y + rect->size.y) <= boundary.pos.y + boundary.size.y;
             }
-
-            size_t size() const {
-                return objects.size();
-            }
-
-            // void render(SDL_Renderer* renderer) {
-            //     SDL_RenderRect(renderer, &boundary);
-            //     for(auto& child: children) 
-            //         child.render(renderer);
-
-            //     for(auto& point: objects) {
-            //         drawFilledCircle(renderer, point.x, point.y, 1);
-            //     }
-            // }
     };
 
 

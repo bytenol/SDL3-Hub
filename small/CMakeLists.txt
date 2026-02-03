@@ -62,4 +62,7 @@ add_executable(ballPhysics ballPhysics.cpp)
 target_link_libraries(ballPhysics PRIVATE ideps)
 
 add_executable(mode7 mode7.cpp)
-target_link_libraries(mode7 PRIVATE ideps)
+target_link_libraries(mode7 PRIVATE SDL3::SDL3 SDL3_image::SDL3_image)
+
+add_executable(eightball eightball.cpp)
+target_link_libraries(eightball PRIVATE SDL3::SDL3 SDL3_image::SDL3_image)
