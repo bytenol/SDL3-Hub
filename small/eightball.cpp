@@ -82,7 +82,7 @@ enum class WallPos
 	RIGHT
 };
 
-struct PhysicsObject
+struct Vertex
 {
 	phy::vec2 pos, vel;
 	float mass = 1.0f;
@@ -90,17 +90,17 @@ struct PhysicsObject
 
 	BodyType type = BodyType::DEFAULT;
 
-	PhysicsObject() = default;
-	virtual ~PhysicsObject() = default;
+	Vertex() = default;
+	virtual ~Vertex() = default;
 	virtual AABB getBoundary() = 0;
 };
 
-struct Wall: PhysicsObject
+struct Wall: Vertex
 {
 	phy::vec2 start, end;
 	WallPos position;
 
-	Wall(): PhysicsObject() {
+	Wall(): Vertex() {
 		type = BodyType::WALL;
 		position = WallPos::INCLINED;
 		isStatic = true;
@@ -111,12 +111,12 @@ struct Wall: PhysicsObject
 	};
 };
 
-struct Ball: public PhysicsObject 
+struct Ball: public Vertex 
 {
 	float radius = 10.0f;
 	int textureId = -1;
 
-	Ball(): PhysicsObject() {
+	Ball(): Vertex() {
 		type = BodyType::BALL;
 	}
 
@@ -135,7 +135,7 @@ std::vector<Ball*> balls;
 
 class PhysicsWorld
 {
-	using body_type = std::unique_ptr<PhysicsObject>;
+	using body_type = std::unique_ptr<Vertex>;
 	std::vector<body_type> bodies;
 	const float dragFactor = 0.2f;
 	const float wallFriction = 0.9f;
@@ -147,7 +147,7 @@ class PhysicsWorld
 
 	template<typename T, typename... Args>
 	T& createObject(Args&&... args) {
-		static_assert(std::is_base_of_v<PhysicsObject, T>);
+		static_assert(std::is_base_of_v<Vertex, T>);
 		auto body = std::make_unique<T>(std::forward<Args>(args)...);
 		T& ref = *body;
 		bodies.push_back(std::move(body));
@@ -374,7 +374,7 @@ class Quadtree
 		}
 };
 
-Quadtree<PhysicsObject> qtree;
+Quadtree<Vertex> qtree;
 
 void update(const float& dt)
 {

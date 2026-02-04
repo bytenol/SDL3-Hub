@@ -21,8 +21,6 @@ target_link_libraries(ideps INTERFACE SDL3::SDL3)
 # add_executable(integrationScheme integrationScheme.cpp)
 # target_link_libraries(integrationScheme PRIVATE ideps)
 
-# add_executable(verlet verlet.cpp)
-# target_link_libraries(verlet PRIVATE ideps)
 
 # add_executable(SAT SAT.cpp)
 # target_link_libraries(SAT PRIVATE ideps)
@@ -66,3 +64,6 @@ target_link_libraries(mode7 PRIVATE SDL3::SDL3 SDL3_image::SDL3_image)
 
 add_executable(eightball eightball.cpp)
 target_link_libraries(eightball PRIVATE SDL3::SDL3 SDL3_image::SDL3_image)
+
+add_executable(verlet verlet.cpp)
+target_link_libraries(verlet PRIVATE SDL3::SDL3)
