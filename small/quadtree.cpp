@@ -30,29 +30,52 @@ bool rectToRectIntersect(const SDL_FRect& a, const SDL_FRect& b);
 std::vector<phy::Rect2D> objects;
 std::vector<SDL_Color> colors;
 phy::Quadtree<phy::Rect2D> qtree;
+std::vector<phy::Rect2D*> queried;
+phy::Rect2D range;
 
 
 void init()
 {
 
-    for(int i = 0; i < 4; i++) {
-        makeBlock(randRange(50, W - 100), randRange(50, H - 100), randRange(20, 50), randRange(20, 50));
+    for(int i = 0; i < 1000; i++) {
+        makeBlock(randRange(0, W - 30), randRange(0, H - 30), randRange(15, 30), randRange(15, 30));
     }
 
     t0 = std::chrono::high_resolution_clock::now().time_since_epoch();
 }
 
-void render(SDL_Renderer* renderer)
-{
-    renderQuadtree(renderer, qtree);
-}
-
-
 void update(float dt, SDL_Renderer* renderer)
 {
-    qtree.resize(phy::Rect2D{ {0, 0}, {W, H}}, 4);
+	qtree.resize(phy::Rect2D{ {0.0f, 0.0f}, {W, H} }, 4, 500);
+	for(auto& obj: objects) qtree.insert(&obj);
 
-    for(auto& object: objects) qtree.insert(&object);
+	queried.clear();
+	qtree.getRange(range, queried);
+}
+
+void render(SDL_Renderer* renderer)
+{
+	for(int i = 0; i < objects.size(); i++)
+	{
+		auto& obj = objects[i];
+		auto& color = colors[i];
+		SDL_FRect rect{ obj.pos.x, obj.pos.y, obj.size.x, obj.size.y };
+		SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 255);
+		SDL_RenderFillRect(renderer, &rect);
+	}
+
+	renderQuadtree(renderer, qtree);
+
+	for(auto& obj: queried)
+	{
+		SDL_FRect rect{ obj->pos.x, obj->pos.y, obj->size.x, obj->size.y };
+		SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
+		SDL_RenderFillRect(renderer, &rect);
+	}
+
+	SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
+	SDL_FRect rect{ range.pos.x, range.pos.y, range.size.x, range.size.y };
+	SDL_RenderRect(renderer, &rect);
 }
 
 bool processEvent(SDL_Event& evt) {
@@ -64,10 +87,10 @@ bool processEvent(SDL_Event& evt) {
             break;
 
         case SDL_EVENT_MOUSE_MOTION:
-            
-            // const float px = evt.motion.x;
-            // const float py = evt.motion.y;
-            // selectedBall->pos = { px, py };
+            range.pos.x = evt.motion.x - 100;
+			range.pos.y = evt.motion.y - 100;
+			range.size.x = 200;
+			range.size.y = 200;
             break;
 
         case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -171,34 +194,14 @@ bool pointInRect(const SDL_FPoint &point, const SDL_FRect &rect)
         point.y >= rect.y && point.y <= rect.y + rect.h);
 }
 
-bool rectToRectIntersect(const SDL_FRect &a, const SDL_FRect &b)
-{
-    return (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y);
-}
 
 
 template<typename T>
 void renderQuadtree(SDL_Renderer* renderer, const phy::Quadtree<T>& qtree)
 {
-    SDL_FRect rect;
-    auto& allObjects = qtree.getObjects();
-
-    for(int i = 0; i < allObjects.size(); i++) 
-    {
-        auto& object = allObjects[i];
-        auto& color = colors[i];
-        rect.x = object->pos.x;
-        rect.y = object->pos.y;
-        rect.w = object->size.x;
-        rect.h = object->size.y;
-        SDL_SetRenderDrawColor(renderer, color.r, color.g, color.b, 255);
-        SDL_RenderFillRect(renderer, &rect);    
-    }
-
-
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     auto& boundary = qtree.getBoundary();
-    rect = { boundary.pos.x, boundary.pos.y, boundary.size.x, boundary.size.y };
+    SDL_FRect rect = { boundary.pos.x, boundary.pos.y, boundary.size.x, boundary.size.y };
     SDL_RenderRect(renderer, &rect);
 
     for(auto& child: qtree.getChildren()) {

@@ -1,204 +1,229 @@
 /*
 * @file Archimedes.cpp
 * @date 19th Jan, 2025
+* Refactored 15th Feb, 2026
 */
+#include <iostream>
+#include <random>
+#include <string>
 #include <vector>
-#include <cmath>
+#include <chrono>
 #include <SDL3/SDL.h>
 
-SDL_Renderer* renderer;
-int W = 680;
-int H = 480;
+#include "./include/phy/vec2.h"
 
+constexpr int W = 640;
+constexpr int H = 480;
+constexpr float fixedTimeStep = 1.0f / 60.0f;
+float fixedTimeAccumulator = 0.0f;
+
+std::chrono::high_resolution_clock::duration t0;/*  */
+
+
+bool init();
+void process(const float& dt);
+void physicsProcess(const float& dt);
+void render(SDL_Renderer* renderer);
+void pollEvent(SDL_Event& evt);
+void animate();
+float randRange(const float& min, const float& max);
+void drawFilledCircle(SDL_Renderer* renderer, const float& x, const float& y, const float& radius);
+
+struct
+{
+	SDL_Window* window = nullptr;
+	SDL_Renderer* renderer = nullptr;
+	bool windowShouldClose = false;
+	SDL_Event evt;
+} canvas;
+
+
+constexpr float g = 100.0f;
 SDL_FRect pond;
 
-struct Vec2
+struct {
+	phy::vec2 pos, vel, acc;
+	float mass = 1.0f;
+	float radius = 1.0f;
+} ball;
+
+float ballDensity = 0.1f;
+float pondDensity = 0.2f;
+
+
+void physicsProcess(const float& dt)
 {
-	float x = 0.0f, y = 0.0f;
-	Vec2& operator+=(const Vec2& o)
+	ball.pos += ball.vel * dt + ball.acc * (dt * dt * 0.5f);
+	auto lastAcc = ball.acc;
+
+	// calc acceleration
+	float ballVolume = 3.1415f * ball.radius * ball.radius;
+	float ballMass = ballDensity * ballVolume;
+	float dragCoeff = 0.4f;
+
+	float submergedArea = 0.0f;
+
+	float waterLine = pond.y;
+	float bottom = ball.pos.y + ball.radius;
+	float top = ball.pos.y - ball.radius;
+
+	if (bottom > waterLine)
 	{
-		x += o.x;
-		y += o.y;
-		return *this;
+		float h = bottom - waterLine;
+
+		if (h >= 2 * ball.radius)
+		{
+			submergedArea = ballVolume; // fully submerged
+		}
+		else
+		{
+			float r = ball.radius;
+			float segmentHeight = h;
+
+			submergedArea =
+				r * r * std::acos((r - segmentHeight) / r)
+				- (r - segmentHeight) * sqrt(2 * r * segmentHeight - segmentHeight * segmentHeight);
+		}
 	}
 
-	Vec2 operator+(const Vec2& o)
-	{
-		return { x + o.x, y + o.y };
-	}
+	float u = pondDensity * g * submergedArea;
 
-	Vec2 operator-(const Vec2& o)
-	{
-		return { x - o.x, y - o.y };
-	}
+	phy::vec2 weight{ 0, ballMass * g };
+	phy::vec2 upthrust { 0, -u };
+	phy::vec2 drag;
 
-	Vec2 operator*(const float& f)
-	{
-		return { x * f, y * f };
-	}
-};
+	if(submergedArea > 0.0f) drag = ball.vel * -(dragCoeff * ball.vel.length());
 
-struct Ball
+	auto force = weight + upthrust + drag;
+	ball.acc = force * (1 / ballMass );
+ 
+	// update acceleration
+	ball.vel += (ball.acc + lastAcc) * (0.5f * dt);
+}
+
+
+void process(const float& dt){}
+
+
+void render(SDL_Renderer* renderer)
 {
-	float mass;
-	SDL_Color color;
-	Vec2 pos;
-	Vec2 vel;
+	SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+	SDL_RenderClear(renderer);
 
-	float GetRadius() const
-	{
-		return 10.0f + mass * 10.0f;
-	}
-};
+	SDL_SetRenderDrawColor(renderer, 64, 224, 208, 50);
+	SDL_RenderFillRect(renderer, &pond);
 
-std::vector<Ball> balls;
+	SDL_SetRenderDrawColor(renderer, 195, 32, 18, 255);
+	drawFilledCircle(renderer, ball.pos.x, ball.pos.y, ball.radius);
+}
 
-void drawFilledCircle(SDL_Renderer* r, float px, float py, float radius);
 
-void init()
+bool init()
 {
 	pond.x = 0.0f;
 	pond.y = H * 0.5f;
 	pond.w = W;
 	pond.h = H - pond.y;
 
-	balls.push_back({ 1.0f, { 255, 0, 0, 255 } });
-	balls[0].pos.x = 50.0f;
-	balls[0].pos.y = 20.0f;
-	balls[0].vel.x = 40.0f;
-}
-
-void render(SDL_Renderer* renderer)
-{
-	//SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDFACTOR_ONE_MINUS_SRC_ALPHA);
-
-	SDL_SetRenderDrawColor(renderer, 0, 110, 200, 10);
-	SDL_RenderFillRect(renderer, &pond);
-
-	for (const auto& ball : balls)
-	{
-		SDL_SetRenderDrawColor(renderer, ball.color.r, ball.color.g, ball.color.b, ball.color.a);
-		drawFilledCircle(renderer, ball.pos.x, ball.pos.y, ball.GetRadius());
-	}
-}
-
-
-void update(float dt, SDL_Renderer* renderer)
-{
-	for (auto& ball : balls)
-	{
-		ball.pos += ball.vel * dt;
-
-		const float g = 10.0f;
-		Vec2 weight{ 0, ball.mass * g };
-		float density = 1.0f;
-		float bVolume = ball.mass / density;
-
-		float airDensity = 0.5f;
-		float waterDensity = 1.2f;
-		Vec2 upthrust{ 0, 0 };
-		Vec2 drag{ 0, 0 };
-
-		float bRadius = ball.GetRadius();
-		if (ball.pos.y + bRadius >= pond.y)
-		{
-			float dist = std::abs((ball.pos.y + bRadius) - pond.y);
-			if (dist <= bRadius * 2.0f)
-			{
-				float sWater = waterDensity * (dist / bRadius) * bVolume * g;
-				float sAir = airDensity * ((bRadius - dist) / bRadius) * bVolume * g;
-				upthrust.y = sAir + sWater;
-				drag = ball.vel * -0.2f * ((dist / bRadius) * bVolume);
-			}
-			else {
-				upthrust.y = waterDensity * bVolume * g;
-				drag = ball.vel * -0.2f;
-			}
-		}
-		else {
-			upthrust.y = airDensity * bVolume * g;
-		}
-
-		Vec2 force, acc;
-		force += weight - upthrust + drag;
-		acc = force * (1 / ball.mass);
-		ball.vel += acc * dt;
-	}
+	ball.pos = { 300.0f, 0.0f };
+	ball.radius = 20.0f;
+	ball.acc = {0, 0};
+	ball.vel = { randRange(-50, 50), 0 };
+	return true;
 }
 
 
 int main()
 {
-	if (SDL_Init(SDL_INIT_VIDEO) <= 0)
+	canvas.window = SDL_CreateWindow("Archimedes Principle", W, H, 0);
+	canvas.renderer = SDL_CreateRenderer(canvas.window, nullptr);
+
+	if (!canvas.window || !canvas.renderer)
 	{
-		SDL_Log("SDL_INITIALIZATION ERROR: %s", SDL_GetError());
+		SDL_Log("Error creating canvas window or renderer: %s", SDL_GetError());
 		return -1;
 	}
 
-	auto window = SDL_CreateWindow("Archimedes", W, H, 0);
-	if (!window)
-	{
-		SDL_Log("WINDOW_CREATION_FAILED: %s", SDL_GetError());
-		return -1;
-	}
-
-	renderer = SDL_CreateRenderer(window, nullptr);
-	if (!renderer)
-	{
-		SDL_Log("RENDERER_INITIALIZATION_FAILED: %s", SDL_GetError());
-		return -1;
-	}
-
-	SDL_Event evt;
-	bool windowShouldClose = false;
 	init();
-	while (!windowShouldClose)
-	{
-		while (SDL_PollEvent(&evt))
-		{
-			if (evt.type == SDL_EVENT_QUIT)
-				windowShouldClose = true;
-		}
-		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-		SDL_RenderClear(renderer);
-		render(renderer);
-		update(1 / 60.0f, renderer);
-		SDL_RenderPresent(renderer);
-	}
 
-	SDL_DestroyWindow(window);
+	animate();
+	SDL_DestroyWindow(canvas.window);
 	SDL_Quit();
 	return 0;
 }
 
 
-void drawFilledCircle(SDL_Renderer* r, float px, float py, float radius)
+void pollEvent(SDL_Event& evt)
 {
-	auto drawHorizontalLine = [](SDL_Renderer* renderer, int x1, int x2, int y) -> void {
-		for (int x = x1; x <= x2; x++)
-			SDL_RenderPoint(renderer, x, y);
-		};
-
-	int x = 0;
-	int y = radius;
-	int d = 3 - int(radius) << 1;
-
-	while (y >= x) {
-		// Draw horizontal lines (scanlines) for each section of the circle
-		drawHorizontalLine(r, px - x, px + x, py - y);
-		drawHorizontalLine(r, px - x, px + x, py + y);
-		drawHorizontalLine(r, px - y, px + y, py - x);
-		drawHorizontalLine(r, px - y, px + y, py + x);
-
-		// Update decision parameter and points
-		if (d < 0) {
-			d = d + (x << 2) + 6;
+	while (SDL_PollEvent(&evt))
+	{
+		if (evt.type == SDL_EVENT_QUIT)
+		{
+			canvas.windowShouldClose = true;
+			return;
 		}
-		else {
-			d = d + ((x - y) << 2) + 10;
-			y--;
-		}
-		x++;
-
 	}
+}
+
+void animate()
+{
+	t0 = std::chrono::high_resolution_clock::now().time_since_epoch();
+	while (!canvas.windowShouldClose)
+	{
+		auto t1 = std::chrono::high_resolution_clock::now().time_since_epoch();
+		std::chrono::duration<float> delta = t1 - t0;
+		float dt = delta.count();
+		t0 = t1;
+		fixedTimeAccumulator += dt;
+		pollEvent(canvas.evt);
+		process(dt);
+
+		while(fixedTimeAccumulator > fixedTimeStep) {
+			physicsProcess(fixedTimeStep);
+			fixedTimeAccumulator -= fixedTimeStep;
+		}
+
+		SDL_SetRenderDrawColor(canvas.renderer, 0, 0, 0, 255);
+		SDL_RenderClear(canvas.renderer);
+		render(canvas.renderer);
+		SDL_RenderPresent(canvas.renderer);
+	}
+}
+
+void drawFilledCircle(SDL_Renderer* renderer, const float& px, const float& py, const float& radius)
+{
+    auto drawHorizontalLine = [](SDL_Renderer* renderer, int x1, int x2, int y) -> void {
+        for (int x = x1; x <= x2; x++)
+            SDL_RenderPoint(renderer, x, y);
+        };
+
+    int x = 0;
+    int y = radius;
+    int d = 3 - (int(radius) << 1);
+
+    while (y >= x)
+    {
+        drawHorizontalLine(renderer, px - x, px + x, py - y);
+        drawHorizontalLine(renderer, px - x, px + x, py + y);
+        drawHorizontalLine(renderer, px - y, px + y, py - x);
+        drawHorizontalLine(renderer, px - y, px + y, py + x);
+
+        if (d < 0)
+            d = d + (x << 2) + 6;
+        else {
+            d = d + ((x - y) << 2) + 10;
+            y--;
+        }
+        x++;
+    }
+
+}
+
+
+float randRange(const float& min, const float& max)
+{
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dist(min, max);
+    return dist(gen);
 }

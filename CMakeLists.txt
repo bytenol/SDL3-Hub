@@ -11,4 +11,4 @@ find_package(SDL3_image CONFIG REQUIRED)
 # find_package(GTest REQUIRED)
 
 add_subdirectory(small)
-# add_subdirectory(test)
+add_subdirectory(physics)

@@ -5,13 +5,6 @@
 
 namespace phy {
 
-    template<typename T>
-    concept RectangularObjectConcept = requires(T t) 
-    {
-        t.pos;
-        t.size;
-    };
-
     struct Point2D {
         float x = 0, y = 0;
     };
@@ -24,6 +17,14 @@ namespace phy {
 
         inline float getArea() {
             return size.x * size.y;
+        }
+
+        constexpr bool containsPoint(const Point2D& other) {
+            return false;
+        }
+
+        constexpr bool intersectRect(const Rect2D& other) {
+            return false;
         }
     };
 

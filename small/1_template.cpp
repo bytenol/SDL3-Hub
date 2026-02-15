@@ -1,6 +1,3 @@
-/*
-TODO: once ball rect has intersect with a static ball, just ignore other collisions
-*/
 #include <iostream>
 #include <random>
 #include <string>
@@ -15,10 +12,11 @@ constexpr int H = 480;
 constexpr float fixedTimeStep = 1.0f / 60.0f;
 float fixedTimeAccumulator = 0.0f;
 
-std::chrono::high_resolution_clock::duration t0;
+std::chrono::high_resolution_clock::duration t0;/*  */
+
 
 bool init();
-void update(const float& dt);
+void process(const float& dt);
 void physicsProcess(const float& dt);
 void render(SDL_Renderer* renderer);
 void pollEvent(SDL_Event& evt);
@@ -34,71 +32,36 @@ struct
 	SDL_Event evt;
 } canvas;
 
-phy::vec2 pos, vel, acc;
-constexpr float mass = 1.0f;
-constexpr float g = 10.0f;
-constexpr float radius = 20.0f;
-
-phy::vec2 calcAcc(const phy::vec2& vel) {
-	phy::vec2 weight{ 0.0f, mass * g };
-	phy::vec2 drag = vel * -0.1f;
-	auto force = weight + drag;
-	auto acc = force * (1 / mass);
-	return acc;
-};
 
 
 void physicsProcess(const float& dt)
 {
-	// runge-kutta (RK4) scheme
-	auto p1 = pos;
-	auto v1 = vel;
-	auto a1 = calcAcc(v1);
-	auto p2 = p1 + v1 * (dt * 0.5f);
-	auto v2 = v1 + a1 * (dt * 0.5f);
-	auto a2 = calcAcc(v2);
-	auto p3 = p1 + v2 * (dt * 0.5f);
-	auto v3 = v1 + a2 * (dt * 0.5f);
-	auto a3 = calcAcc(v3);
-	auto p4 = p1 + v3 * dt;
-	auto v4 = v1 + a3 * dt;
-	auto a4 = calcAcc(v4);
 
-	pos += (v1 + v2 * 2.0f + v3 * 2.0f + v4) * (dt / 6.0f);
-	vel += (a1 + a2 * 2.0f + a3 * 2.0f + a4) * (dt / 6.0f);
-
-	if(pos.y + radius > H) {
-		pos.y = H - radius;
-		vel.y *= -0.85f;
-	}
 }
 
 
-void update(const float& dt)
+void process(const float& dt)
 {
-
+	
 }
 
 
 void render(SDL_Renderer* renderer)
 {
-	SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-	drawFilledCircle(renderer, pos.x, pos.y, radius);
+
 }
 
 
 bool init()
 {
-	pos = { W * 0.5f, 0.0f };
-	vel = { 0.0f, 0.0f };
-	acc = { 0.0f, 0.0f };
+
 	return true;
 }
 
 
 int main()
 {
-	canvas.window = SDL_CreateWindow("Integration Scheme", W, H, 0);
+	canvas.window = SDL_CreateWindow("EightBall", W, H, 0);
 	canvas.renderer = SDL_CreateRenderer(canvas.window, nullptr);
 
 	if (!canvas.window || !canvas.renderer)
@@ -134,11 +97,12 @@ void animate()
 	while (!canvas.windowShouldClose)
 	{
 		auto t1 = std::chrono::high_resolution_clock::now().time_since_epoch();
-		const float dt = (t1 - t0).count() * 10e-9;
+		std::chrono::duration<float> delta = t1 - t0;
+		float dt = delta.count();
 		t0 = t1;
 		fixedTimeAccumulator += dt;
 		pollEvent(canvas.evt);
-		update(dt);
+		process(dt);
 
 		while(fixedTimeAccumulator > fixedTimeStep) {
 			physicsProcess(fixedTimeStep);

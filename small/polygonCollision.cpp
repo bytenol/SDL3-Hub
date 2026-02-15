@@ -1,6 +1,7 @@
 /*
 * @file RigidBody1.cpp
 * @date 11th Jan, 2026
+* Added SAT collision on 14th Feb, 2026.
 */
 #include <iostream>
 #include <vector>
@@ -20,9 +21,11 @@ std::chrono::high_resolution_clock::duration t0;
 float v = 1;
 float w = 0.5;
 float angDispl = 0;
+bool useSat = true;
 
 struct collisionInfo {
 	phy::vec2 vertex, intersection, edge;
+	float depth = 0.0f;
 
 	void render(SDL_Renderer* renderer) {
 		SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
@@ -35,6 +38,7 @@ struct collisionInfo {
 };
 
 bool checkPolygonCollision(phy::polygon& poly1, phy::polygon& poly2, collisionInfo& minCollision);
+bool satCollision(phy::polygon& poly1, phy::polygon& pol2, collisionInfo& minCollision);
 bool processEvent(SDL_Event& evt);
 void renderPolygon(phy::polygon& polygon);
 void drawFilledCircle(SDL_Renderer* r, float px, float py, float radius);
@@ -69,6 +73,66 @@ void init()
     t0 = std::chrono::high_resolution_clock::now().time_since_epoch();
 }
 
+bool satCollision(phy::polygon& poly1, phy::polygon& poly2, collisionInfo& minCollision)
+{
+	phy::polygon* polygon1 = &poly1;
+	phy::polygon* polygon2 = &poly2;
+
+	float depth = INFINITY;
+	phy::polygon* refPolygon = polygon1;
+
+	for(int i = 0; i < 2; i++) {
+		if(i > 0) {
+			polygon1 = &poly2;
+			polygon2 = &poly1;
+		}
+
+		for(int i = 0; i < polygon1->vertices.size(); i++)
+		{
+			auto rotation = polygon1->getRotation();
+			auto p1 = polygon1->pos + polygon1->vertices[i].rotate(rotation);
+			auto p2 = polygon1->pos + polygon1->vertices[(i + 1) % polygon1->vertices.size()].rotate(rotation);
+			auto edge = (p2 - p1).normalize();
+			auto normal = edge.perp(1).normalize();
+
+			float minA = INFINITY, maxA = -INFINITY;
+			float minB = INFINITY, maxB = -INFINITY;
+
+			for(int i = 0; i < polygon1->vertices.size(); i++)
+			{
+				auto pos = polygon1->pos + polygon1->vertices[i].rotate(polygon1->getRotation());
+				auto dp = pos.dotProduct(normal);
+				minA = std::min(dp, minA);
+				maxA = std::max(dp, maxA);
+			}
+
+			for(int i = 0; i < polygon2->vertices.size(); i++)
+			{
+				auto pos = polygon2->pos + polygon2->vertices[i].rotate(polygon2->getRotation());
+				auto dp = pos.dotProduct(normal);
+				minB = std::min(dp, minB);
+				maxB = std::max(dp, maxB);
+			}
+
+			bool isColliding = maxA >= minB && maxB >= minA;
+			if(!isColliding) {
+				return false;
+			}
+
+			float overlap = std::min(maxA, maxB) - std::max(minA, minB);
+			
+			if(overlap < depth) {
+				depth = overlap;
+				minCollision.depth = depth;
+				minCollision.edge = normal;
+			}
+		}
+
+	}
+	
+	return true;
+}
+
 
 bool checkPolygonCollision(phy::polygon& poly1, phy::polygon& poly2, collisionInfo& minCollision) {
 	phy::polygon* polygon1 = &poly1;
@@ -97,14 +161,12 @@ bool checkPolygonCollision(phy::polygon& poly1, phy::polygon& poly2, collisionIn
 				float u = -((l1.x - l2.x) * (l1.y - l3.y) - (l1.y - l2.y) * (l1.x - l3.x)) / denom;
 
 				if(t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-					collisionInfo info;
-					info.vertex = l2;
-					info.intersection.x = l1.x + t * (l2.x - l1.x);
-					info.intersection.y = l1.y + t * (l2.y - l1.y);
-					info.edge = (l4 - l3).normalize();
-					
-					if(info.length() < minLength) {
-						minCollision = info;
+					phy::vec2 intersection { l1.x + t * (l2.x - l1.x), l1.y + t * (l2.y - l1.y) };
+					float d = (intersection - l2).length();
+					if(d < minLength) {
+						minLength = d;
+						minCollision.depth = d;
+						minCollision.edge = (l4 - l3).normalize().perp(1);
 						hasCollided = true;
 					}
 				}
@@ -116,6 +178,7 @@ bool checkPolygonCollision(phy::polygon& poly1, phy::polygon& poly2, collisionIn
 
 	return hasCollided;
 }
+
 
 void render(SDL_Renderer* renderer)
 {
@@ -143,9 +206,14 @@ void update(float dt, SDL_Renderer* renderer)
 		for(auto& polygon2: polygons) {
 			if(&polygon != &polygon2) {
 				collisionInfo info;
-				if(checkPolygonCollision(polygon, polygon2, info)) {
-					auto displ = info.intersection - info.vertex;
-					polygon.pos -= displ;
+				int(*a)(int, int);
+				bool(*collisionFunction)(phy::polygon& p1, phy::polygon& p2, collisionInfo& c);
+				collisionFunction = useSat ? satCollision : checkPolygonCollision;
+				if(collisionFunction(polygon, polygon2, info)) {
+					auto normal = info.edge;
+					auto displ = normal * (info.depth * 0.5f);
+					polygon.pos += displ;
+					polygon2.pos -= displ;
 				}
 			}
 		}

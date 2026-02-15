@@ -171,11 +171,11 @@ void init()
 	setupBlock(40,20,-130,300,70);
 	setupBlock(20,20,-10,200,110);
 
-	// for(int i = 0; i < 150; i++) {
-	// 	const float sx = randRange(6, 30);
-	// 	const float sy = randRange(6, 30);
-	// 	setupBlock(sx, sy, randRange(0, 360), randRange(sx, W), randRange(0, 90));
-	// }
+	for(int i = 0; i < 150; i++) {
+		const float sx = randRange(6, 30);
+		const float sy = randRange(6, 30);
+		setupBlock(sx, sy, randRange(0, 360), randRange(sx, W), randRange(0, 90));
+	}
 
 	// setupBlock(50, 60, 0, 200, 0);
 
@@ -294,6 +294,7 @@ void update(float dt, SDL_Renderer* renderer)
 		checkWallBounce(polygon);
 
 		// collision detection
+		// for(int i = 0; i < 5; i++)
 		for(auto& polygon2: ranged) {
 			if(&polygon != polygon2) {
 				collisionInfo info;

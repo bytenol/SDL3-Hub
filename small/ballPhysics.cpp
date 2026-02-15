@@ -15,9 +15,9 @@
 using namespace phy;
 
 SDL_Renderer* renderer;
-constexpr int W = 1024;
+constexpr int W = 480;
 constexpr int H = 640;
-constexpr float fixedTimeStep = 1.0f / 6.0f;
+constexpr float fixedTimeStep = 1.0f / 60.0f;
 float timeAccumulator = 0.0f;
 std::chrono::high_resolution_clock::duration t0;
 
@@ -196,6 +196,7 @@ class Ball {
         void ballToBallCollision(std::vector<Ball*>& balls) {
 
             for(auto& ball: balls) {
+
                 if(ball != this) {
                     auto dist = ball->pos - pos;
                     const float maxRadius = radius + ball->radius;
@@ -203,7 +204,7 @@ class Ball {
 
                     if(dl < maxRadius) {
                         auto normal = dist.normalize();
-                        auto displ = normal * ((maxRadius - dl) * 0.5);
+                        auto displ = normal * ((maxRadius - dl) * 0.5f);
                         pos -= displ;
                         ball->pos += displ;
 
@@ -226,7 +227,8 @@ class Ball {
 
                         vel = tangentVel1 + normalVel1;
                         ball->vel = tangetVel2 + normalVel2;
-
+                        acc = phy::vec2{ 0, 0 };
+                        ball->acc = phy::vec2{ 0, 0 };
                     }
                 }
             }
@@ -239,7 +241,7 @@ void init()
 {
     balls.clear();
 
-    for(int i = 0; i < 100; i++) {
+    for(int i = 0; i < 50; i++) {
         const float radius = randRange(10, 20);
         balls.push_back({ {randRange(0, W), randRange(0, 90)}, radius, radius * 0.5f });
     }
@@ -261,27 +263,43 @@ void physicsProcess(const float& dt)
 {
     selectedBall = &(balls[selectedIndex % balls.size()]);
 
-    qtree = Quadtree<Ball*>({ 0, 0, W, H }, 4);
-    for(auto& ball: balls) qtree.insert(&ball);
-
     std::vector<Ball*> collidingBall;
 
-    for(int i = 0; i < 2; i++)
+    // for(auto& ball: balls) {
+    //     ball.pos += ball.vel * dt;
+    //     ball.force = { 0, ball.mass * 10 };
+    //     ball.acc = ball.force * (1/ball.mass);
+    //     ball.vel += ball.acc * dt;
+    // }
+    qtree = Quadtree<Ball*>({ 0, 0, W, H }, 4);
+        
+    for(auto& ball: balls) {
+        ball.vel += ball.acc * (dt * 0.5f);
+        if(ball.vel.length() < 0.01f) ball.vel *= 0.0f;
+    }
+
+    for(auto& ball: balls) {
+        ball.pos += ball.vel * dt;
+    }
+
+    for(auto& ball: balls) {
+        qtree.insert(&ball);
+    }
+
+    // for(int i = 0; i < 2; i++)
     for(int i = 0; i < balls.size(); i++) {
         auto& ball = balls[i];
         auto ranged = qtree.findObject({ ball.pos.x - 50, ball.pos.y - 50, 100, 100 });
         ball.ballToBallCollision(ranged);
         ball.checkWallBounce();
-        
-    }
 
+    }
+        
     for(auto& ball: balls) {
-        ball.pos += ball.vel * dt;
         ball.force = { 0, ball.mass * 10 };
         ball.acc = ball.force * (1/ball.mass);
-        ball.vel += ball.acc * dt;
+        ball.vel += ball.acc * (dt * 0.5f);
     }
-        
 }
 
 

@@ -1,6 +1,3 @@
-/*
-TODO: once ball rect has intersect with a static ball, just ignore other collisions
-*/
 #include <iostream>
 #include <random>
 #include <string>
@@ -8,7 +5,7 @@ TODO: once ball rect has intersect with a static ball, just ignore other collisi
 #include <chrono>
 #include <SDL3/SDL.h>
 
-#include "./include/phy/vec2.h"
+#include "../include/phy/vec2.h"
 
 constexpr int W = 640;
 constexpr int H = 480;
@@ -18,8 +15,8 @@ float fixedTimeAccumulator = 0.0f;
 std::chrono::high_resolution_clock::duration t0;
 
 bool init();
-void update(const float& dt);
 void physicsProcess(const float& dt);
+void update(const float& dt);
 void render(SDL_Renderer* renderer);
 void pollEvent(SDL_Event& evt);
 void animate();
@@ -34,71 +31,63 @@ struct
 	SDL_Event evt;
 } canvas;
 
-phy::vec2 pos, vel, acc;
-constexpr float mass = 1.0f;
-constexpr float g = 10.0f;
-constexpr float radius = 20.0f;
 
-phy::vec2 calcAcc(const phy::vec2& vel) {
-	phy::vec2 weight{ 0.0f, mass * g };
-	phy::vec2 drag = vel * -0.1f;
-	auto force = weight + drag;
-	auto acc = force * (1 / mass);
-	return acc;
+struct Particle
+{
+	phy::vec2 pos, vel, acc;
+	float mass = 1.0f;
 };
 
+Particle ball;
+constexpr float ballRadius = 20.0f;
 
+
+// Where all physics update goes
 void physicsProcess(const float& dt)
 {
-	// runge-kutta (RK4) scheme
-	auto p1 = pos;
-	auto v1 = vel;
-	auto a1 = calcAcc(v1);
-	auto p2 = p1 + v1 * (dt * 0.5f);
-	auto v2 = v1 + a1 * (dt * 0.5f);
-	auto a2 = calcAcc(v2);
-	auto p3 = p1 + v2 * (dt * 0.5f);
-	auto v3 = v1 + a2 * (dt * 0.5f);
-	auto a3 = calcAcc(v3);
-	auto p4 = p1 + v3 * dt;
-	auto v4 = v1 + a3 * dt;
-	auto a4 = calcAcc(v4);
+	ball.vel += ball.acc * (dt * 0.5f);
+	ball.pos += ball.vel * dt;
 
-	pos += (v1 + v2 * 2.0f + v3 * 2.0f + v4) * (dt / 6.0f);
-	vel += (a1 + a2 * 2.0f + a3 * 2.0f + a4) * (dt / 6.0f);
-
-	if(pos.y + radius > H) {
-		pos.y = H - radius;
-		vel.y *= -0.85f;
+	if(ball.pos.y + ballRadius > H ) {
+		ball.pos.y = H - ballRadius;
+		ball.vel.y *= -0.85f;
 	}
+	
+	// compute acceleration
+	constexpr float g = 10.0f;
+	phy::vec2 weight { 0, ball.mass * g };
+	auto drag = ball.vel * -0.05f;
+	phy::vec2 force = weight + drag;
+	ball.acc = force * (1 / ball.mass);
+	ball.vel += ball.acc * (dt * 0.5f);
 }
 
 
 void update(const float& dt)
 {
-
+	
 }
 
 
 void render(SDL_Renderer* renderer)
 {
 	SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-	drawFilledCircle(renderer, pos.x, pos.y, radius);
+	drawFilledCircle(renderer, ball.pos.x, ball.pos.y, ballRadius);
 }
 
 
 bool init()
 {
-	pos = { W * 0.5f, 0.0f };
-	vel = { 0.0f, 0.0f };
-	acc = { 0.0f, 0.0f };
+	ball.pos = { 100.0f, 0.0f };
+	ball.vel = { 0.0f, 0.0f };
+	ball.acc = { 0.0f, 0.0f };
 	return true;
 }
 
 
 int main()
 {
-	canvas.window = SDL_CreateWindow("Integration Scheme", W, H, 0);
+	canvas.window = SDL_CreateWindow("Bouncing Ball", W, H, 0);
 	canvas.renderer = SDL_CreateRenderer(canvas.window, nullptr);
 
 	if (!canvas.window || !canvas.renderer)
@@ -125,7 +114,7 @@ void pollEvent(SDL_Event& evt)
 			canvas.windowShouldClose = true;
 			return;
 		}
-	}
+    }
 }
 
 void animate()
@@ -151,6 +140,7 @@ void animate()
 		SDL_RenderPresent(canvas.renderer);
 	}
 }
+
 
 void drawFilledCircle(SDL_Renderer* renderer, const float& px, const float& py, const float& radius)
 {

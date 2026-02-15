@@ -18,8 +18,11 @@ target_link_libraries(ideps INTERFACE SDL3::SDL3)
 # add_executable(tictactoe tictactoe.cpp)
 # target_link_libraries(tictactoe PRIVATE ideps)
 
-# add_executable(integrationScheme integrationScheme.cpp)
-# target_link_libraries(integrationScheme PRIVATE ideps)
+add_executable(integrationScheme integrationScheme.cpp)
+target_link_libraries(integrationScheme PRIVATE SDL3::SDL3)
+
+add_executable(softBodies softBodies.cpp)
+target_link_libraries(softBodies PRIVATE SDL3::SDL3)
 
 
 # add_executable(SAT SAT.cpp)
