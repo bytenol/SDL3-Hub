@@ -34,14 +34,14 @@ struct
 	SDL_Event evt;
 } canvas;
 
-phy::vec2 pos, vel, acc;
+phy::vec3 pos, vel, acc;
 constexpr float mass = 1.0f;
 constexpr float g = 10.0f;
 constexpr float radius = 20.0f;
 
-phy::vec2 calcAcc(const phy::vec2& vel) {
-	phy::vec2 weight{ 0.0f, mass * g };
-	phy::vec2 drag = vel * -0.1f;
+phy::vec3 calcAcc(const phy::vec3& vel) {
+	phy::vec3 weight{ 0.0f, mass * g };
+	phy::vec3 drag = vel * -0.1f;
 	auto force = weight + drag;
 	auto acc = force * (1 / mass);
 	return acc;

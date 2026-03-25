@@ -21,11 +21,9 @@ constexpr int H = 480;
 constexpr int FLOOR = 460;
 std::chrono::high_resolution_clock::duration t0;
 
-std::vector<phy::vec3> minkowskiPos, minkSimplex;
-
 bool processEvent(SDL_Event& evt);
-bool gjkCollision(phy::PolygonRb* polygon1, phy::PolygonRb* poly2, std::vector<phy::vec3>& simplex);
-bool epa(phy::PolygonRb* polygon1, phy::PolygonRb* polygon2, std::vector<phy::vec3>& simplex, 
+bool gjkCollision(phy::RigidShape* polygon1, phy::RigidShape* poly2, std::vector<phy::vec3>& simplex);
+bool epa(phy::RigidShape* polygon1, phy::RigidShape* polygon2, std::vector<phy::vec3>& simplex, 
 	phy::vec3& outNormal, float& outDepth);
 void addCircle(const float& x, const float& y, const float& r);
 phy::PolygonRb* addRect(const float& x, const float& y, const float& w, const float& h);
@@ -59,57 +57,37 @@ void init()
     t0 = std::chrono::high_resolution_clock::now().time_since_epoch();
 }
 
-bool gjkCollision(phy::PolygonRb* A, phy::PolygonRb* B, std::vector<phy::vec3>& simplex)
+bool gjkCollision(phy::RigidShape* A, phy::RigidShape* B, std::vector<phy::vec3>& simplex)
 {
-    auto support = [&](const phy::vec3& dir) -> phy::vec3 {
-        auto findFurthest = [](phy::PolygonRb* poly, const phy::vec3& d) {
-            float maxDot = -INFINITY;
-            phy::vec3 best;
+	auto support = [&](const phy::vec3& dir) {
+		return A->findSupportPoint(dir) - B->findSupportPoint(dir * -1.0f);
+	};        
 
-            for (auto& v : poly->vertices) {
-                auto world = poly->pos + v.rotate(poly->getRotation());
-                float dot = world.dotProduct(d);
-                if (dot > maxDot) {
-                    maxDot = dot;
-                    best = world;
-                }
-            }
-            return best;
-        };
-
-        return findFurthest(A, dir) - findFurthest(B, dir * -1.0f);
-    };
-
-    auto tripleProduct = [&](const phy::vec3& a, const phy::vec3& b, const phy::vec3& c) {
-        auto d =  b * a.dotProduct(c) - a * b.dotProduct(c);
-		return d;
-    };
-
-	auto doSimplex = [&](std::vector<phy::vec3>& simplex, phy::vec3& dir) {
-		if (simplex.size() == 2) {
-            // Line case
+	auto doSimplex = [](std::vector<phy::vec3>& simplex, phy::vec3& dir)
+	{
+		if(simplex.size() == 2) {
+			// line case
 			auto a = simplex[1];
-            auto b = simplex[0];
+			auto b = simplex[0];
+			auto ab = b - a;
+			auto ao = a * -1.0f;
+			dir = ab * ao * ab;
 
-            auto ab = b - a;
-            auto ao = a * -1.0f;
-
-            dir = tripleProduct(ab, ao, ab);
-
-            if (dir.length() == 0)
+			if (dir.length() == 0)
                 dir = phy::vec3(ab.y, -ab.x);
+			
+		} else {
+			// triangle case
+			auto a = simplex[2];
+			auto b = simplex[1];
+			auto c = simplex[0];
 
-        } else if (simplex.size() == 3) {
-            auto a = simplex[2];
-            auto b = simplex[1];
-            auto c = simplex[0];
-
-            auto ab = b - a;
+			auto ab = b - a;
             auto ac = c - a;
             auto ao = a * -1.0f;
 
-            auto abPerp = tripleProduct(ac, ab, ab);
-            auto acPerp = tripleProduct(ab, ac, ac);
+			auto abPerp = ac * ab * ab;
+            auto acPerp = ab * ac * ac;
 
             if (abPerp.dotProduct(ao) > 0) {
                 simplex = { b, a };
@@ -123,131 +101,83 @@ bool gjkCollision(phy::PolygonRb* A, phy::PolygonRb* B, std::vector<phy::vec3>& 
                 // Origin is inside triangle
                 return true;
             }
-        }
+		}
+
 		return false;
 	};
 
-	
+	auto dir = B->pos - A->pos;
+	if(dir.length() == 0) dir = {1, 0};
 
-    // Initial direction
-    phy::vec3 dir = B->pos - A->pos;
-    if (dir.length() == 0) dir = {1, 0};
-
-    // First point
-    simplex.push_back(support(dir));
-    dir = simplex[0] * -1.0f;
-
-    const int MAX_ITER = 30;
-	int iter = 0;
-
-    while (iter++ < MAX_ITER) {
-        phy::vec3 Anew = support(dir);
-
-        // No collision
-        if (Anew.dotProduct(dir) <= 0)
-            return false;
-
-        simplex.push_back(Anew);
-
-        // --- Handle simplex ---
-        if(doSimplex(simplex, dir)) return true;
-    }
-
-    return false; // fallback
-}
-
-
-bool epa(phy::PolygonRb* polygon1, phy::PolygonRb* polygon2, std::vector<phy::vec3>& simplex, 
-	phy::vec3& outNormal, float& outDepth)
-{
-	  auto support = [&](const phy::vec3& dir) -> phy::vec3 {
-        auto findFurthest = [](phy::PolygonRb* poly, const phy::vec3& d) {
-            float maxDot = -INFINITY;
-            phy::vec3 best;
-
-            for (auto& v : poly->vertices) {
-                auto world = poly->pos + v.rotate(poly->getRotation());
-                float dot = world.dotProduct(d);
-                if (dot > maxDot) {
-                    maxDot = dot;
-                    best = world;
-                }
-            }
-            return best;
-        };
- 
-        return findFurthest(polygon1, dir) - findFurthest(polygon2, dir * -1.0f);
-    };
-
-
-	auto cross = [](const phy::vec3& a, const phy::vec3& b, const phy::vec3& c) {
-		return (b - a).x * (c - a).y - (b - a).y * (c - a).x;
-	};
-
-	// Ensure CCW
-	// if (simplex.size() == 3) {
-	// 	if (cross(simplex[0], simplex[1], simplex[2]) < 0) {
-	// 		std::swap(simplex[1], simplex[2]);
-	// 	}
-	// }
+	auto p = support(dir);
+	simplex.push_back(p);
+	dir *= -1.0f;
 
 	const int MAX_ITER = 50;
-	const float TOLERANCE = 0.0001f;
+	int iter = 0;
+	while(iter++ < MAX_ITER) {
+		p = support(dir);
 
-	for(int iter = 0; iter < MAX_ITER; iter++)
-	{
-		EPAEdge closestEdge;
-		closestEdge.distance = INFINITY;
+		// if it is not beyond origin
+		if(p.dotProduct(dir) <= 0) 
+			return false;
 
-		for(int i = 0; i < simplex.size(); i++) {
-			int j = (i + 1) % simplex.size();
+		simplex.push_back(p);
 
-			phy::vec3 a = simplex[i];
-			phy::vec3 b = simplex[j];
-			phy::vec3 edge = b - a;
-
-			// CCW outward normal
-			phy::vec3 normal = edge.perp(1).normalize();
-
-			float dist = normal.dotProduct(a);
-
-			if(dist < closestEdge.distance) {
-				closestEdge.distance = dist;
-				closestEdge.normal = normal;
-				closestEdge.index = j;
-			}
-		}
-
-		phy::vec3 p = support(closestEdge.normal);
-		float d = p.dotProduct(closestEdge.normal);
-
-		// convergence
-		if (d - closestEdge.distance < TOLERANCE) {
-			outNormal = closestEdge.normal;
-			outDepth = d;
+		if(doSimplex(simplex, dir))
 			return true;
-		}
-
-		// duplicate guard
-		// bool duplicate = false;
-		// for (auto& v : simplex) {
-		// 	if ((v - p).length() < 1e-6f) {
-		// 		duplicate = true;
-		// 		break;
-		// 	}
-		// }
-
-		// if (duplicate) {
-		// 	outNormal = closestEdge.normal;
-		// 	outDepth = d;
-		// 	return true;
-		// }
-
-		simplex.insert(simplex.begin() + closestEdge.index, p);
 	}
 
 	return false;
 }
+ 
+
+bool epa(phy::RigidShape* polygon1, phy::RigidShape* polygon2, std::vector<phy::vec3>& simplex, 
+	phy::vec3& outNormal, float& outDepth)
+{
+
+	auto support = [&](const phy::vec3& dir) {
+		return polygon1->findSupportPoint(dir) - polygon2->findSupportPoint(dir * -1.0f);
+	};
+
+	float tolerance = 0.0001f;
+
+	const int MAX_ITER = 50;
+	int iter = 0;
+	while(iter++ < MAX_ITER) {
+
+		EPAEdge closestEdge;
+		closestEdge.distance = INFINITY;
+		for(int i = 0; i < simplex.size(); i++) {
+			int j = (i + 1) % simplex.size();
+			auto a = simplex[i];
+			auto b = simplex[j];
+			auto edge = b - a;
+			auto normal = edge.perp(1).normalize();
+			auto dp = a.dotProduct(normal);
+			if(dp < closestEdge.distance) {
+				closestEdge.distance = dp;
+				closestEdge.index = j;
+				closestEdge.normal = normal;
+			}
+		}
+
+		auto p = support(closestEdge.normal);
+		float d = p.dotProduct(closestEdge.normal);
+		if(d - closestEdge.distance < tolerance) {
+			outDepth = d;
+			outNormal = closestEdge.normal;
+			return true;
+		}
+
+		simplex.insert(simplex.begin() + closestEdge.index, p);
+
+	}
+
+	return false;
+}
+
+
 
 
 void render(SDL_Renderer* renderer)
@@ -273,28 +203,7 @@ void render(SDL_Renderer* renderer)
 				drawStrokedCircle(renderer, body->pos.x, body->pos.y, circle->radius);
 				break;
 		}
-		// renderPolygon(body);
 	}
-
-	phy::vec3 org { 500, 200 };
-
-	SDL_SetRenderDrawColor(renderer, 0, 255, 0, 255);
-	auto mp = phy::PolygonRb();
-	mp.vertices = minkowskiPos;
-	mp.pos = org;
-	renderPolygon(&mp);
-
-	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
-	auto ms = phy::PolygonRb();
-	mp.vertices = minkSimplex;
-	mp.pos = org;
-	renderPolygon(&mp);
-
-	SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
-	drawFilledCircle(renderer, org.x, org.y, 2);
-
-	minkSimplex.clear();
-	minkowskiPos.clear();
 
 }
 
@@ -307,19 +216,17 @@ void update(float dt, SDL_Renderer* renderer)
 
 	for(size_t i = 0; i < bodies.size(); i++) {
 		for(size_t j = i + 1; j < bodies.size(); j++) {
-			auto* poly1 = dynamic_cast<phy::PolygonRb*>(bodies[i].get());
-			auto* poly2 = dynamic_cast<phy::PolygonRb*>(bodies[j].get());
-
+			auto poly1 = bodies[i].get();
+			auto poly2 = bodies[j].get();
 			if(poly1 && poly2) {
 				std::vector<phy::vec3> simplex;
 				if(gjkCollision(poly1, poly2, simplex)) {
 					phy::vec3 normal;
 					float depth;
-					minkSimplex = simplex;
 					if(epa(poly1, poly2, simplex, normal, depth)) {
 						auto displ = normal * (depth * 0.5f);
-						// poly1->pos -= displ;
-						// poly2->pos += displ;
+						poly1->pos -= displ;
+						poly2->pos += displ;
 					}
 				}
 			}
@@ -377,7 +284,7 @@ int main()
 		return -1;
 	}
 
-	auto window = SDL_CreateWindow("GJK Collision", W, H, 0);
+	auto window = SDL_CreateWindow("GJK Collision Shapes", W, H, 0);
 	if (!window)
 	{
 		SDL_Log("WINDOW_CREATION_FAILED: %s", SDL_GetError());

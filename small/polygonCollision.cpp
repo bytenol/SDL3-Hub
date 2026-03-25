@@ -23,8 +23,8 @@ float w = 0.5;
 float angDispl = 0;
 bool useSat = true;
 
-struct collisionInfo {
-	phy::vec2 vertex, intersection, edge;
+struct CollisionInfo {
+	phy::vec3 vertex, intersection, edge;
 	float depth = 0.0f;
 
 	void render(SDL_Renderer* renderer) {
@@ -37,29 +37,29 @@ struct collisionInfo {
 	}
 };
 
-bool checkPolygonCollision(phy::polygon& poly1, phy::polygon& poly2, collisionInfo& minCollision);
-bool satCollision(phy::polygon& poly1, phy::polygon& pol2, collisionInfo& minCollision);
+bool checkPolygonCollision(phy::PolygonRb& poly1, phy::PolygonRb& poly2, CollisionInfo& minCollision);
+bool satCollision(phy::PolygonRb& poly1, phy::PolygonRb& pol2, CollisionInfo& minCollision);
 bool processEvent(SDL_Event& evt);
-void renderPolygon(phy::polygon& polygon);
+void renderPolygon(phy::PolygonRb& polygon);
 void drawFilledCircle(SDL_Renderer* r, float px, float py, float radius);
 
 
 int selected = 0;
-phy::polygon* selectedPolygon = nullptr;
-std::vector<phy::polygon> polygons;
-std::vector<collisionInfo> collisionInfos;
+phy::PolygonRb* selectedPolygon = nullptr;
+std::vector<phy::PolygonRb> polygons;
+std::vector<CollisionInfo> collisionInfos;
 
 
 void init()
 {
-    std::vector<phy::vec2> triangleVert {
+    std::vector<phy::vec3> triangleVert {
         { -50, -20 },
 		{ 50, -20},
 		{50, 20},
 		{-50, 20}
     };
 
-    phy::polygon p1;
+    phy::PolygonRb p1;
     p1.vertices = triangleVert;
     p1.pos = { W/2, 70 };
     p1.mass = 1.0f;
@@ -73,13 +73,13 @@ void init()
     t0 = std::chrono::high_resolution_clock::now().time_since_epoch();
 }
 
-bool satCollision(phy::polygon& poly1, phy::polygon& poly2, collisionInfo& minCollision)
+bool satCollision(phy::PolygonRb& poly1, phy::PolygonRb& poly2, CollisionInfo& minCollision)
 {
-	phy::polygon* polygon1 = &poly1;
-	phy::polygon* polygon2 = &poly2;
+	phy::PolygonRb* polygon1 = &poly1;
+	phy::PolygonRb* polygon2 = &poly2;
 
 	float depth = INFINITY;
-	phy::polygon* refPolygon = polygon1;
+	phy::PolygonRb* refPolygon = polygon1;
 
 	for(int i = 0; i < 2; i++) {
 		if(i > 0) {
@@ -134,9 +134,9 @@ bool satCollision(phy::polygon& poly1, phy::polygon& poly2, collisionInfo& minCo
 }
 
 
-bool checkPolygonCollision(phy::polygon& poly1, phy::polygon& poly2, collisionInfo& minCollision) {
-	phy::polygon* polygon1 = &poly1;
-	phy::polygon* polygon2 = &poly2;
+bool checkPolygonCollision(phy::PolygonRb& poly1, phy::PolygonRb& poly2, CollisionInfo& minCollision) {
+	phy::PolygonRb* polygon1 = &poly1;
+	phy::PolygonRb* polygon2 = &poly2;
 
 	float minLength = INFINITY;
 
@@ -161,7 +161,7 @@ bool checkPolygonCollision(phy::polygon& poly1, phy::polygon& poly2, collisionIn
 				float u = -((l1.x - l2.x) * (l1.y - l3.y) - (l1.y - l2.y) * (l1.x - l3.x)) / denom;
 
 				if(t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-					phy::vec2 intersection { l1.x + t * (l2.x - l1.x), l1.y + t * (l2.y - l1.y) };
+					phy::vec3 intersection { l1.x + t * (l2.x - l1.x), l1.y + t * (l2.y - l1.y) };
 					float d = (intersection - l2).length();
 					if(d < minLength) {
 						minLength = d;
@@ -204,22 +204,19 @@ void update(float dt, SDL_Renderer* renderer)
 	
 	for(auto& polygon: polygons) {
 		for(auto& polygon2: polygons) {
-			if(&polygon != &polygon2) {
-				collisionInfo info;
-				int(*a)(int, int);
-				bool(*collisionFunction)(phy::polygon& p1, phy::polygon& p2, collisionInfo& c);
-				collisionFunction = useSat ? satCollision : checkPolygonCollision;
-				if(collisionFunction(polygon, polygon2, info)) {
-					auto normal = info.edge;
-					auto displ = normal * (info.depth * 0.5f);
-					polygon.pos += displ;
-					polygon2.pos -= displ;
-				}
+			// if(&polygon >= &polygon2) continue;
+			
+			CollisionInfo info;
+			if(satCollision(polygon, polygon2, info)) {
+				auto normal = info.edge;
+				auto displ = normal * (info.depth * 0.5f);
+				polygon.pos += displ;
+				polygon2.pos -= displ;
 			}
 		}
 	}
-
 }
+
 
 bool processEvent(SDL_Event& evt) {
 	switch(evt.type) {
@@ -329,7 +326,7 @@ void drawFilledCircle(SDL_Renderer* r, float px, float py, float radius)
 	}
 }
 
-void renderPolygon(phy::polygon &polygon)
+void renderPolygon(phy::PolygonRb &polygon)
 {
 	for(int i = 0; i < polygon.vertices.size(); i++) {
 		auto v1 = polygon.pos + polygon.vertices[i].rotate(polygon.getRotation());

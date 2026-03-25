@@ -36,10 +36,10 @@ namespace phy {
 
             void getRange(const Rect2D& range, std::vector<T*>& queried)
             {
-                if(!rectToRectIntersect(range, boundary)) return;
+                if(!rectToRectIntersect<Rect2D, Rect2D>(range, boundary)) return;
 
                 for(auto& object: objects) {
-                    if(rectToRectIntersect(*object, range))
+                    if(rectToRectIntersect<T, Rect2D>(*object, range))
                         queried.push_back(object);
                 }
 
@@ -50,7 +50,7 @@ namespace phy {
                 if(!rectFitCompletely(object, boundary))
                     return false;
 
-                if(objects.size() < capacity && !children.size()) {
+                if(objects.size() < capacity && children.empty()) {
                     objects.push_back(object);
                     return true;
                 } else {
@@ -61,7 +61,6 @@ namespace phy {
                 {
                     if(child->insert(object)) {
                         return true;
-                        break;
                     }
                 }
 
@@ -98,37 +97,44 @@ namespace phy {
                 redistributeObject();
             }
 
-            void redistributeObject() { 
-                std::vector<int> toBeDeleted;
-                int i = 0;
-                for(auto it = objects.begin(); it != objects.end(); it++)
+            void redistributeObject()
+            {
+                if(children.empty()) return;
+
+                for(auto it = objects.begin(); it != objects.end(); )
                 {
-                    for(auto child: children)
+                    T* obj = *it;
+                    bool moved = false;
+
+                    // Try to move into exactly one child
+                    for(auto& child : children)
                     {
-                        if(child->insert(*it)) {
-                            toBeDeleted.push_back(i);
-                            continue;
+                        if(child->rectFitCompletely(obj, child->boundary))
+                        {
+                            child->objects.push_back(obj);
+                            it = objects.erase(it);  // erase safely
+                            moved = true;
+                            break; // IMPORTANT: stop after first match
                         }
                     }
-                    i++;
-                }
 
-                for(auto& index: toBeDeleted) {
-                    objects.erase(objects.begin() + index, objects.begin() + index + 1);
+                    if(!moved)
+                        ++it; // stays in parent
                 }
             }
+
 
             inline constexpr bool rectFitCompletely(const T* rect, const phy::Rect2D& boundary) {
                 return rect->pos.x >= boundary.pos.x && (rect->pos.x + rect->size.x) <= boundary.pos.x + boundary.size.x
                     && rect->pos.y >= boundary.pos.y && (rect->pos.y + rect->size.y) <= boundary.pos.y + boundary.size.y;
             }
 
-            template<RectangularObjectConcept A>
-            inline constexpr bool rectToRectIntersect(const A& a, const A& b)
+            template<RectangularObjectConcept A, RectangularObjectConcept B>
+            inline constexpr bool rectToRectIntersect(const A& a, const B& b)
             {
                 return (a.pos.x < b.pos.x + b.size.x && a.pos.x + a.size.x > b.pos.x && 
                     a.pos.y < b.pos.y + b.size.y && a.pos.y + a.size.y > b.pos.y);
-                return false;
+                // return false;
             }
     };
 

@@ -54,8 +54,8 @@ std::map<std::string, Texture> textures;
 
 struct AABB
 {
-	phy::vec2 pos;
-	phy::vec2 size;
+	phy::vec3 pos;
+	phy::vec3 size;
 
 	bool intersect(const AABB& other)
 	{
@@ -84,7 +84,7 @@ enum class WallPos
 
 struct Vertex
 {
-	phy::vec2 pos, vel;
+	phy::vec3 pos, vel, acc;
 	float mass = 1.0f;
 	bool isStatic = false;
 
@@ -97,7 +97,7 @@ struct Vertex
 
 struct Wall: Vertex
 {
-	phy::vec2 start, end;
+	phy::vec3 start, end;
 	WallPos position;
 
 	Wall(): Vertex() {
@@ -121,13 +121,13 @@ struct Ball: public Vertex
 	}
 
 	AABB getBoundary() override {
-		return { phy::vec2{ pos.x - radius, pos.y - radius}, phy::vec2{ radius * 2.0f, radius * 2.0f } };
+		return { phy::vec3{ pos.x - radius, pos.y - radius}, phy::vec3{ radius * 2.0f, radius * 2.0f } };
 	};
 };
 
 Ball* selectedBall = nullptr;
 struct {
-	phy::vec2 pos;
+	phy::vec3 pos;
 	bool isActive = false;
 } mouse;
 std::vector<Ball*> balls;
@@ -157,15 +157,10 @@ class PhysicsWorld
 	void update(const float& dt) 
 	{
 		// update position
-		int i = 0;
 		for(auto& body: bodies) {
 			if(body->isStatic) continue;
+			body->vel += body->acc * dt;
 			body->pos += body->vel * dt;
-			if(body->vel.length() < 0.01f) {
-				body->vel.x = 0;
-				body->vel.y = 0;
-			}
-			i++;
 		}
 
 		// get collision
@@ -192,8 +187,7 @@ class PhysicsWorld
 		for(auto& body: bodies) {
 			if(body->isStatic) continue;
 			auto force = body->vel * -dragFactor;
-			auto acc = force * (1 / body->mass);
-			body->vel += acc * dt;
+			body->acc = force * (1 / body->mass);
 		}
 	}
 
@@ -288,40 +282,34 @@ class PhysicsWorld
 
 			if(body2->isStatic && distLen < maxRadius * 0.5f) {
 				body1->vel *= 0.0f;
-				// body1->pos = body2->pos;
-				std::cout << "Hello wotld" << std::endl;
 				return;
 			}
 
 			if(distLen < maxRadius) {
-
-				auto normal = dist * (1 / distLen);
-				const float depth = maxRadius - distLen;
-				auto displ = normal * depth * 0.5f;
-				body1->pos -= displ;
-				body2->pos += displ;
-
-				// before impact
-				auto normalVel1 = normal * body1->vel.dotProduct(normal);
-				auto normalVel2 = normal * body2->vel.dotProduct(normal);
-
-				auto tangentVel1 = body1->vel - normalVel1;
-				auto tangentVel2 = body2->vel - normalVel2;
-
-				float u1 = normalVel1.dotProduct(normal);
-				float u2 = normalVel2.dotProduct(normal);
+				auto normal = dist * (1 / distLen);				
 				float m1 = body1->mass;
 				float m2 = body2->mass;
 				float tm = m1 + m2;
 
-				float v1 = ((m1-m2) * u1 + 2 * m2 * u2) / tm;
-				float v2 = ((m2-m1) * u2 + 2 * m1 * u1) / tm;
+				auto relVel = body2->vel - body1->vel;
+				auto normalVel = relVel.dotProduct(normal);
 
-				normalVel1 = normal * v1;
-				normalVel2 = normal * v2;
+				if(normalVel > 0) return;
 
-				body1->vel = normalVel1 + tangentVel1;
-				body2->vel = normalVel2 + tangentVel2;
+				float restitution = 1.0f;
+				float j = -(1 + restitution) * normalVel;
+				j /= (1/m1 + 1/m2);
+
+				phy::vec3 impulse = normal * j;
+				body1->vel -= impulse * (1/m1);
+				body2->vel += impulse * (1/m2);
+
+				const float slop = 0.01f;
+				const float percent = 0.8f;
+				const float penetration = maxRadius - distLen;
+				const float d = std::max(penetration - slop, 0.0f) / (1/m1 + 1/m2) * percent;
+				body1->pos -= normal * (d/m1);
+				body2->pos += normal * (d/m2);
 			}
 			
 		}
@@ -461,7 +449,7 @@ void pollEvent(SDL_Event& evt)
 
 		if(evt.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
 		{
-			phy::vec2 mouse{ evt.motion.x, evt.motion.y };
+			phy::vec3 mouse{ evt.motion.x, evt.motion.y };
 			auto dist = selectedBall->pos - mouse;
 			if(dist.length() < selectedBall->radius) {
 				::mouse.isActive = true;
@@ -519,7 +507,7 @@ void initBalls()
 	auto createBall = [](const float& x, const float& y, const float& r, const bool& s = false) -> Ball&
 	{
 		auto& ball = world.createObject<Ball>();
-		ball.pos = phy::vec2{ x, y };
+		ball.pos = phy::vec3{ x, y };
 		ball.radius = r;
 		ball.isStatic = s;
 
@@ -567,8 +555,8 @@ void initWalls()
 	auto createWall = [](const float& sx, const float& sy, const float& ex, const float& ey, const WallPos& p)
 	{
 		auto& wall = world.createObject<Wall>();
-		wall.start = phy::vec2{ sx, sy };
-		wall.end = phy::vec2{ ex, ey };
+		wall.start = phy::vec3{ sx, sy };
+		wall.end = phy::vec3{ ex, ey };
 		wall.position = p;
 	};
 

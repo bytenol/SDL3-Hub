@@ -10,5 +10,9 @@ find_package(SDL3_image CONFIG REQUIRED)
 # find_package(glm CONFIG REQUIRED)
 # find_package(GTest REQUIRED)
 
+include_directories(deps/Painter2-main/include)
+
+add_subdirectory(deps/Painter2-main)
+
 add_subdirectory(small)
 add_subdirectory(physics)

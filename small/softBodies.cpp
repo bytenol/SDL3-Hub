@@ -37,18 +37,18 @@ struct
 
 struct Particle
 {
-    phy::vec2 pos, vel, acc, lastPos;
+    phy::vec3 pos, vel, acc, lastPos;
     float mass = 1.0f;
 };
 
 constexpr float g = 10.0f;
 constexpr float k = 0.2f;
 int ropeLength;
-phy::vec2 pivot1, pivot2;
+phy::vec3 pivot1, pivot2;
 std::vector<Particle> particles;
 std::vector<std::vector<Particle*>> constraints;
 
-phy::vec2 makeSpringForce(const phy::vec2& a, phy::vec2& b, const float& k)
+phy::vec3 makeSpringForce(const phy::vec3& a, phy::vec3& b, const float& k)
 {
     auto dist = b - a;
     auto l = dist.length();
@@ -63,8 +63,8 @@ void calcAcceleration()
         auto& particle = particles[i];
         auto& constraint = constraints[i];
 
-        phy::vec2 weight{ 0.0f, particle.mass * g };
-        phy::vec2 spring{ 0.0f, 0.0f };
+        phy::vec3 weight{ 0.0f, particle.mass * g };
+        phy::vec3 spring{ 0.0f, 0.0f };
 
         for(auto& particle2: constraint)
             spring += makeSpringForce(particle.pos, particle2->pos, k);
@@ -164,7 +164,7 @@ bool init()
     for(int x = 0; x < divMax; x++) {
         Particle p;
         p.pos = { pivot1.x + (float)x * ropeLength, pivot1.y + randRange(-15.0f, 15.0f) };
-        p.lastPos = p.pos + phy::vec2(randRange(-10.0f, 10.0f), randRange(-10.0f, 10.0f));
+        p.lastPos = p.pos + phy::vec3(randRange(-10.0f, 10.0f), randRange(-10.0f, 10.0f));
         p.vel = { 0.0f, 0.0f };
         p.acc = { 0.0f, 0.0f };
         // p.mass = randRange(0.3f, 1.0f);

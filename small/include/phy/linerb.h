@@ -6,9 +6,9 @@
 namespace phy {
 
     struct LineRb {
-        vec2 startPos, endPos;
+        vec3 startPos, endPos;
 
-        vec2 getDir() {
+        vec3 getDir() {
             return endPos - startPos;
         }
     };

@@ -6,9 +6,9 @@
 namespace phy {
     
     struct collisionInfo {
-        vec2 vertex, intersection, edge, normal, rp1, rp2;
+        vec3 vertex, intersection, edge, normal, rp1, rp2;
 
-        vec2 getDir() const {
+        vec3 getDir() const {
             return intersection - vertex;
         }
 
@@ -19,7 +19,7 @@ namespace phy {
 
     struct collision {
 
-        static bool lineToLineIntersect(const vec2& l1, const vec2& l2, const vec2& l3, const vec2& l4, collisionInfo& info)
+        static bool lineToLineIntersect(const vec3& l1, const vec3& l2, const vec3& l3, const vec3& l4, collisionInfo& info)
         {
             float denom = (l1.x - l2.x) * (l3.y - l4.y) - (l1.y - l2.y) * (l3.x - l4.x);
             float t = ((l1.x - l3.x) * (l3.y - l4.y) - (l1.y - l3.y) * (l3.x - l4.x)) / denom;

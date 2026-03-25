@@ -24,8 +24,8 @@ float angDispl = 0;
 void drawFilledCircle(SDL_Renderer* r, float px, float py, float radius);
 
 struct polygon {
-    std::vector<phy::vec2> vertices;
-    phy::vec2 pos, vel, acc, force;
+    std::vector<phy::vec3> vertices;
+    phy::vec3 pos, vel, acc, force;
     float mass = 1;
 	float im = 1;
     float angVelo = 0;
@@ -34,7 +34,7 @@ struct polygon {
     SDL_Color color{ 255, 0, 0 };
 
     void setRotation(const float& angle) {
-		theta = 0;
+		theta = angle;
         for(auto& vert: vertices) {
             vert = vert.rotate(angle);
         }
@@ -48,7 +48,7 @@ struct polygon {
     void render(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
 
-        phy::vec2 prev;
+        phy::vec3 prev;
         for(int i = 0; i < vertices.size() - 1; i++) {
             const auto curr = pos + vertices[i];
             const auto next = pos + vertices[i + 1];
@@ -66,7 +66,7 @@ polygon poly;
 
 void init()
 {
-    std::vector<phy::vec2> triangleVert {
+    std::vector<phy::vec3> triangleVert {
         { -50, -20 },
 		{ 50, -20},
 		{50, 20},
@@ -78,7 +78,7 @@ void init()
     p1.pos = { W/2, 30 };
     p1.vel = { 0.0f, 0.0f };
     p1.mass = 1.0f;
-	p1.im = 5000;
+	p1.im = (p1.mass / 12) * (100 * 100 + 40 * 40);
 	p1.setRotation(3.141596/4);
 	poly = p1;
 
@@ -103,7 +103,7 @@ void update(float dt, SDL_Renderer* renderer)
 	bool isColliding = false, testCollision = false;
 	int j;
 	for(int i = 0; i < poly.vertices.size(); i++) {
-		auto nPos = poly.pos + poly.vertices[i].rotate(poly.getRotation());
+		auto nPos = poly.pos + poly.vertices[i];
 		if(nPos.y >= FLOOR) {
 			if(!testCollision) {
 				testCollision = true;
@@ -114,23 +114,24 @@ void update(float dt, SDL_Renderer* renderer)
 
 	// test collision
 	if(testCollision) {
-		auto dist = poly.pos.y + poly.vertices[j].rotate(poly.getRotation()).y - FLOOR;
+		auto dist = poly.pos.y + poly.vertices[j].y - FLOOR;
 		poly.pos.y -= dist;
-		phy::vec2 normal { 0, -1 };
+		phy::vec3 normal { 0, -1 };
 
-		auto rp1 = poly.vertices[j].rotate(poly.getRotation());
-		auto vp1 = poly.vel + rp1.perp(-poly.angVelo * rp1.length());
-		auto rp1Xnormal = rp1.crossProduct(normal);
+		auto rp1 = poly.vertices[j];
+		phy::vec3 omegaCross{ -poly.angVelo * rp1.y, poly.angVelo * rp1.x };
+		auto vp1 = poly.vel + omegaCross;
+		auto rp1Xnormal = rp1.cross(normal);
 		float cr = 0.4f;
 		float impulse = -(1+cr)*vp1.dotProduct(normal)/(1/poly.mass + rp1Xnormal*rp1Xnormal/poly.im); 
 		poly.vel += normal * (impulse/poly.mass);
-		poly.angVelo += rp1.crossProduct(normal)*impulse/poly.im;
+		poly.angVelo += rp1.cross(normal)*impulse/poly.im;
 
 		testCollision = false;
 	}
 
 	// calc force
-	auto force = phy::vec2(0, poly.mass * 10);
+	auto force = phy::vec3(0, poly.mass * 100);
 	float torque = 0;
 	torque += -1 * poly.angVelo;
 
@@ -174,7 +175,8 @@ int main()
 				windowShouldClose = true;
 		}
         const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
-        const float dt = (now - t0).count() * 10e-9;
+		std::chrono::duration<float> delta = now - t0;
+        const float dt = delta.count();
         t0 = now;
 		update(dt, renderer);
 		SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);

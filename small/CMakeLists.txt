@@ -5,6 +5,13 @@ project(SDL3-Hub-Small)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+
+add_executable(archimedes archimedes.cpp)
+target_link_libraries(archimedes PRIVATE painter2)
+
+add_executable(ballPhysics ballPhysics.cpp)
+target_link_libraries(ballPhysics PRIVATE painter2)
+
 # find_package(SDL3_image CONFIG REQUIRED)
 
 add_library(ideps INTERFACE)
@@ -37,9 +44,6 @@ target_link_libraries(pong2d PRIVATE ideps)
 add_executable(tetris tetris.cpp)
 target_link_libraries(tetris PRIVATE ideps)
 
-add_executable(archimedes archimedes.cpp)
-target_link_libraries(archimedes PRIVATE ideps)
-
 add_executable(sierpienskiTriangle sierpienskiTriangle.cpp)
 target_link_libraries(sierpienskiTriangle PRIVATE ideps)
 
@@ -56,11 +60,17 @@ target_link_libraries(rigidPhysics PRIVATE ideps)
 add_executable(polygonCollision polygonCollision.cpp)
 target_link_libraries(polygonCollision PRIVATE ideps)
 
+add_executable(collisionProject1 collisionProject1.cpp)
+target_link_libraries(collisionProject1 PRIVATE ideps)
+
+add_executable(gjk_collision gjk_collision.cpp)
+target_link_libraries(gjk_collision PRIVATE ideps)
+
+add_executable(gjk_collision1 gjk_collision1.cpp)
+target_link_libraries(gjk_collision1 PRIVATE ideps)
+
 add_executable(quadtree quadtree.cpp)
 target_link_libraries(quadtree PRIVATE ideps)
-
-add_executable(ballPhysics ballPhysics.cpp)
-target_link_libraries(ballPhysics PRIVATE ideps)
 
 add_executable(mode7 mode7.cpp)
 target_link_libraries(mode7 PRIVATE SDL3::SDL3 SDL3_image::SDL3_image)
@@ -70,3 +80,6 @@ target_link_libraries(eightball PRIVATE SDL3::SDL3 SDL3_image::SDL3_image)
 
 add_executable(verlet verlet.cpp)
 target_link_libraries(verlet PRIVATE SDL3::SDL3)
+
+add_executable(rigidSystem rigidSystem.cpp)
+target_link_libraries(rigidSystem PRIVATE SDL3::SDL3)

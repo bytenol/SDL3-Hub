@@ -34,7 +34,7 @@ struct
 
 struct Particle
 {
-	phy::vec2 pos, vel, acc;
+	phy::vec3 pos, vel, acc;
 	float mass = 1.0f;
 };
 
@@ -55,9 +55,9 @@ void physicsProcess(const float& dt)
 	
 	// compute acceleration
 	constexpr float g = 10.0f;
-	phy::vec2 weight { 0, ball.mass * g };
+	phy::vec3 weight { 0, ball.mass * g };
 	auto drag = ball.vel * -0.05f;
-	phy::vec2 force = weight + drag;
+	phy::vec3 force = weight + drag;
 	ball.acc = force * (1 / ball.mass);
 	ball.vel += ball.acc * (dt * 0.5f);
 }

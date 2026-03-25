@@ -34,7 +34,7 @@ struct
 
 struct AABB
 {
-	phy::vec2 pos, size;
+	phy::vec3 pos, size;
 };
 
 enum class BodyType
@@ -46,7 +46,7 @@ enum class BodyType
 
 struct PhysicsObject
 {
-	phy::vec2 pos, lastPos, acc;
+	phy::vec3 pos, lastPos, acc;
 	float radius = 1.0f;
 	float mass = 1.0f;
 	virtual ~PhysicsObject() = default;
@@ -184,14 +184,14 @@ class PhysicsWorld
 				auto tmp = vertex->pos;
 				auto vel = (vertex->pos - vertex->lastPos) * damping;
 				vertex->pos += vel + vertex->acc * (dt * dt);
-				vertex->acc = phy::vec2{ 0, 0 };
+				vertex->acc = phy::vec3{ 0, 0 };
 				vertex->lastPos = tmp;
 			}
 		}
 
 		void calcAcceleration() {
 			for(auto& vertex: vertices) {
-				phy::vec2 weight { 0, vertex->mass * g };
+				phy::vec3 weight { 0, vertex->mass * g };
 				auto force = weight;
 				vertex->acc += force * (1 / vertex->mass);
 			}
@@ -218,7 +218,7 @@ bool init()
 
 	auto createParticle = [](const float& px, const float& py, const float& r = 3.0f) -> Particle& {
 		auto& p = world.createObject<Particle>();
-		p.pos = phy::vec2{ px, py };
+		p.pos = phy::vec3{ px, py };
 		p.lastPos = p.pos;
 		p.radius = r;
 

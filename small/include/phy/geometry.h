@@ -18,9 +18,9 @@ namespace phy {
 
 
     struct Rect2D {
-        vec2 pos, size;
+        vec3 pos, size;
 
-        explicit Rect2D(const vec2& p = { 0, 0 }, const vec2& s = { 0, 0 }): pos(p), size(s) {}
+        explicit Rect2D(const vec3& p = { 0, 0 }, const vec3& s = { 0, 0 }): pos(p), size(s) {}
 
         inline float getArea() {
             return size.x * size.y;

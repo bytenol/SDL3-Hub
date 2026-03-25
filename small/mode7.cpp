@@ -40,7 +40,7 @@ void drawImage(SDL_Renderer* renderer, const Texture& texture, const float &x, c
 
 struct {
 
-	phy::vec2 pos, dir;
+	phy::vec3 pos, dir;
 	float rotation = 0.0f;
 
 	float fov = 45;
@@ -51,8 +51,8 @@ struct {
 	{
 		theta = degToRad(rotation);
 		const float angleRad = degToRad(fov * 0.5f);
-		auto dRight = phy::vec2::fromAngle(angleRad);
-		auto dLeft = phy::vec2::fromAngle(-angleRad);
+		auto dRight = phy::vec3::fromPolarCoord(angleRad);
+		auto dLeft = phy::vec3::fromPolarCoord(-angleRad);
 
 		const float maxDist = (zFar - zNear);
 		a = pos + dRight * zNear;
@@ -135,8 +135,8 @@ struct {
 	{
 
 
-		phy::vec2 nPos;
-		auto offset = phy::vec2(W * 0.5, 0);
+		phy::vec3 nPos;
+		auto offset = phy::vec3(W * 0.5, 0);
 		
 		nPos = offset + pos;
 		SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
@@ -145,12 +145,12 @@ struct {
 		drawFilledCircle(renderer, nPos.x, nPos.y, 3);
 
 		SDL_SetRenderDrawColor(renderer, 190, 25, 50, 255);
-		auto aPos = nPos + phy::vec2::fromAngle(theta) * 20.0f;
+		auto aPos = nPos + phy::vec3::fromPolarCoord(theta) * 20.0f;
 		SDL_RenderLine(renderer, nPos.x, nPos.y, aPos.x, aPos.y);
 	}
 
 	private:
-		phy::vec2 a, b, c, d;
+		phy::vec3 a, b, c, d;
 		float theta;
 
 } player;

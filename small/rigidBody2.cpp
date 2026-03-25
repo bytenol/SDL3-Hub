@@ -23,10 +23,10 @@ float w = 0.5;
 float angDispl = 0;
 float cr = 0.4;
 
-struct collisionInfo {
-	phy::vec2 vertex, intersection, edge, rp1, rp2;
+struct CollisionInfo {
+	phy::vec3 vertex, intersection, edge, rp1, rp2;
 
-	phy::vec2 getDir() const {
+	phy::vec3 getDir() const {
 		return intersection - vertex;
 	}
 
@@ -41,19 +41,19 @@ struct collisionInfo {
 };
 
 float randRange(const float& min, const float& max);
-void checkWallBounce(phy::polygon& poly);
-bool checkPolygonCollision(phy::polygon& poly1, phy::polygon& poly2, collisionInfo& minCollision);
-phy::polygon makeBlock(const float& w, const float& h, const float& m, const float& im);
+void checkWallBounce(phy::PolygonRb& poly);
+bool checkPolygonCollision(phy::PolygonRb& poly1, phy::PolygonRb& poly2, CollisionInfo& minCollision);
+phy::PolygonRb makeBlock(const float& w, const float& h, const float& m, const float& im);
 void setupBlock(const float& w, const float& h, const float& angle, const float& x, const float& y);
 bool processEvent(SDL_Event& evt);
-void renderPolygon(phy::polygon& polygon);
+void renderPolygon(phy::PolygonRb& polygon);
 void drawFilledCircle(SDL_Renderer* r, float px, float py, float radius);
 
 
 int selected = 0;
-phy::polygon* selectedPolygon = nullptr;
-std::vector<phy::polygon> polygons;
-std::vector<collisionInfo> collisionInfos;
+phy::PolygonRb* selectedPolygon = nullptr;
+std::vector<phy::PolygonRb> polygons;
+std::vector<CollisionInfo> collisionInfos;
 
 
 void init()
@@ -75,9 +75,9 @@ void init()
 }
 
 
-bool checkPolygonCollision(phy::polygon& poly1, phy::polygon& poly2, collisionInfo& minCollision) {
-	phy::polygon* polygon1 = &poly1;
-	phy::polygon* polygon2 = &poly2;
+bool checkPolygonCollision(phy::PolygonRb& poly1, phy::PolygonRb& poly2, CollisionInfo& minCollision) {
+	phy::PolygonRb* polygon1 = &poly1;
+	phy::PolygonRb* polygon2 = &poly2;
 
 	float minLength = INFINITY;
 	bool isFirstPolyCollided = true;
@@ -102,7 +102,7 @@ bool checkPolygonCollision(phy::polygon& poly1, phy::polygon& poly2, collisionIn
 				float u = -((l1.x - l2.x) * (l1.y - l3.y) - (l1.y - l2.y) * (l1.x - l3.x)) / denom;
 
 				if(t >= 0 && t <= 1 && u >= 0 && u <= 1) {
-					collisionInfo info;
+					CollisionInfo info;
 					info.vertex = l2;
 					info.intersection.x = l1.x + t * (l2.x - l1.x);
 					info.intersection.y = l1.y + t * (l2.y - l1.y);
@@ -154,7 +154,7 @@ void update(float dt, SDL_Renderer* renderer)
 		// collision detection
 		for(auto& polygon2: polygons) {
 			if(&polygon != &polygon2) {
-				collisionInfo info;
+				CollisionInfo info;
 				if(checkPolygonCollision(polygon, polygon2, info)) {
 					auto displ = info.intersection - info.vertex;
 					polygon.pos -= displ * 0.5;
@@ -173,13 +173,13 @@ void update(float dt, SDL_Renderer* renderer)
 					auto invm2 = 1/polygon2.mass;
 					auto invI1 = 1/polygon.im;
 					auto invI2 = 1/polygon2.im;
-					auto rp1Xn = rp1.crossProduct(normal);
-					auto rp2Xn = rp1.crossProduct(normal);						
+					auto rp1Xn = rp1.cross(normal);
+					auto rp2Xn = rp1.cross(normal);						
 					auto impulse = -(1+cr)*vr.dotProduct(normal)/(invm1 + invm2 + rp1Xn*rp1Xn*invI1 + rp2Xn*rp2Xn*invI2); 
 					polygon.vel = polygon.vel + normal * (impulse*invm1);
-					polygon.angVelo += rp1.crossProduct(normal)*impulse*invI1;
+					polygon.angVelo += rp1.cross(normal)*impulse*invI1;
 					polygon2.vel = polygon2.vel - normal * (impulse*invm2);
-					polygon2.angVelo += -rp2.crossProduct(normal) * impulse * invI2;
+					polygon2.angVelo += -rp2.cross(normal) * impulse * invI2;
 				}
 			}
 		}	// collision detection ends
@@ -190,8 +190,8 @@ void update(float dt, SDL_Renderer* renderer)
 		checkWallBounce(polygon);
 
 		const float g = 5;
-		phy::vec2 weight{ 0, polygon.mass * g };
-		phy::vec2 drag = polygon.vel * -0.9;
+		phy::vec3 weight{ 0, polygon.mass * g };
+		phy::vec3 drag = polygon.vel * -0.9;
 		polygon.force = weight + drag;
 		polygon.torque = 0;
 		polygon.torque += -1 * polygon.angVelo;
@@ -313,7 +313,7 @@ void drawFilledCircle(SDL_Renderer* r, float px, float py, float radius)
 	}
 }
 
-void renderPolygon(phy::polygon &polygon)
+void renderPolygon(phy::PolygonRb &polygon)
 {
 	for(int i = 0; i < polygon.vertices.size(); i++) {
 		auto v1 = polygon.pos + polygon.vertices[i].rotate(polygon.getRotation());
@@ -322,7 +322,7 @@ void renderPolygon(phy::polygon &polygon)
 	}
 }
 
-void checkWallBounce(phy::polygon &poly)
+void checkWallBounce(phy::PolygonRb &poly)
 {
 	int j, j2;
 	bool testCollision = false, testCollision2 = false;
@@ -349,27 +349,27 @@ void checkWallBounce(phy::polygon &poly)
 			testCollision2 = false;
 		}
 
-		phy::vec2 normal { 0, -1 };
+		phy::vec3 normal { 0, -1 };
 		auto rp1 = poly.vertices[j].rotate(rotation);
 		auto vp1 = poly.vel + rp1.perp(-poly.angVelo*rp1.length());
-		auto rp1Xnormal = rp1.crossProduct(normal);
+		auto rp1Xnormal = rp1.cross(normal);
 		auto impulse = -(1+cr)*vp1.dotProduct(normal)/(1/poly.mass + rp1Xnormal*rp1Xnormal/poly.im); 
 		poly.vel = poly.vel + normal * (impulse/poly.mass);
-		poly.angVelo += rp1.crossProduct(normal)*impulse/poly.im;
+		poly.angVelo += rp1.cross(normal)*impulse/poly.im;
 		testCollision = false;
 	}
 
 }
 
-phy::polygon makeBlock(const float& w, const float& h, const float& m, const float& im){
-	std::vector<phy::vec2> vertices {
+phy::PolygonRb makeBlock(const float& w, const float& h, const float& m, const float& im){
+	std::vector<phy::vec3> vertices {
 		{-w/2,-h/2},
 		{w/2,-h/2},
 		{w/2,h/2},
 		{-w/2,h/2}
 	};
 
-	phy::polygon p1;
+	phy::PolygonRb p1;
 	p1.vertices = vertices;
     p1.mass = m;
 	p1.im = im;
