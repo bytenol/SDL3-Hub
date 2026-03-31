@@ -30,10 +30,28 @@ namespace phy {
         std::vector<phy::vec3> vertices;
         struct { float r, g, b; } color;
         float theta = 0;
+        bool isStatic = false;
 
         RbShapeType type = RbShapeType::DEFAULT;  
         RigidShape() = default;
-        virtual phy::vec3 findSupportPoint(const phy::vec3& dir) = 0;
+        
+        virtual phy::vec3 findSupportPoint(const phy::vec3& dir) 
+        {
+            float maxDot = -INFINITY;
+			phy::vec3 best;
+
+			for(auto v: vertices) {
+				auto vp = pos + v.rotate(getRotation());
+				auto dp = vp.dotProduct(dir);
+				if(dp > maxDot) {
+					maxDot = dp;
+					best = vp;
+				}
+			}
+
+			return best;
+        }
+
         virtual ~RigidShape() = default;
 
         void setRotation(const float& angle) {
@@ -53,23 +71,6 @@ namespace phy {
         PolygonRb()
         {
             type = RbShapeType::POLYGON;
-        }
-
-        phy::vec3 findSupportPoint(const phy::vec3& dir)
-        {
-            float maxDot = -INFINITY;
-			phy::vec3 best;
-
-			for(auto v: vertices) {
-				auto vp = pos + v.rotate(getRotation());
-				auto dp = vp.dotProduct(dir);
-				if(dp > maxDot) {
-					maxDot = dp;
-					best = vp;
-				}
-			}
-
-			return best;
         }
 
         Rect2D getBoundary()
@@ -101,13 +102,12 @@ namespace phy {
             type = RbShapeType::CIRCLE;
         }
 
-        phy::vec3 findSupportPoint(const phy::vec3& dir)
+        phy::vec3 findSupportPoint(const phy::vec3& dir) override
         {
             return pos + dir.normalize() * radius;
         }
 
     };
-
 
     struct CollisionInfo {
         phy::vec3 start, end, normal;

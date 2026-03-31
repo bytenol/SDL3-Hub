@@ -60,14 +60,17 @@ target_link_libraries(rigidPhysics PRIVATE ideps)
 add_executable(polygonCollision polygonCollision.cpp)
 target_link_libraries(polygonCollision PRIVATE ideps)
 
-add_executable(collisionProject1 collisionProject1.cpp)
-target_link_libraries(collisionProject1 PRIVATE ideps)
+add_executable(gjk_remastered gjk_remastered.cpp)
+target_link_libraries(gjk_remastered PRIVATE ideps)
 
 add_executable(gjk_collision gjk_collision.cpp)
 target_link_libraries(gjk_collision PRIVATE ideps)
 
 add_executable(gjk_collision1 gjk_collision1.cpp)
 target_link_libraries(gjk_collision1 PRIVATE ideps)
+
+add_executable(gjk_edgeClipping gjk_edgeClipping.cpp)
+target_link_libraries(gjk_edgeClipping PRIVATE ideps)
 
 add_executable(quadtree quadtree.cpp)
 target_link_libraries(quadtree PRIVATE ideps)

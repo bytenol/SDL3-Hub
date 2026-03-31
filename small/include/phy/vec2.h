@@ -110,6 +110,13 @@ namespace phy {
             if(l == 0 || lv == 0) return 0.0f;
             return dotProduct(vec) / lv;
         }
+
+
+        static vec3 trippleProduct(const vec3& a, const vec3& b, const vec3& c) 
+        {
+            return b * a.dotProduct(c) - c * a.dotProduct(b);
+        }
+
   
         static vec3 fromPolarCoord(const float& angleInRadians, const float& scale = 1) {
             return { std::cos(angleInRadians) * scale, std::sin(angleInRadians) * scale };

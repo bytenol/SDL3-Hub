@@ -1,5 +1,5 @@
 /*
-* @file collisionProject1.cpp
+* @file gjk_collision2.cpp
 * @date 1st Mar, 2026
 */
 #include <iostream>
@@ -19,6 +19,7 @@ SDL_Renderer* renderer;
 constexpr int W = 680;
 constexpr int H = 480;
 constexpr int FLOOR = 460;
+std::vector<phy::vec3> contactPoints;
 std::chrono::high_resolution_clock::duration t0;
 
 bool processEvent(SDL_Event& evt);
@@ -54,15 +55,6 @@ void init()
 	auto b1 = addRect(200, 200, 50, 100);
 	auto b2 = addRect(300, 200, 50, 100);
 	b2->setRotation(45.0f);
-
-	for(int i = 0; i < 50; i++) {
-		const float r = randRange(5, 20);
-		auto c = addCircle(randRange(20, W - 20), randRange(20, FLOOR - 20), r);
-	}
-
-	for(int i = 0; i < 10; i++) {
-		auto l = addLine(randRange(0, W), randRange(0, H), randRange(0, W), randRange(0, H));
-	}
 
 	auto floor = addLine(0, FLOOR, W, FLOOR);
     t0 = std::chrono::high_resolution_clock::now().time_since_epoch();
@@ -178,6 +170,10 @@ bool epa(phy::RigidShape* polygon1, phy::RigidShape* polygon2, std::vector<phy::
 		if(d - closestEdge.distance < tolerance) {
 			outDepth = d;
 			outNormal = closestEdge.normal;
+
+			if((polygon2->pos - polygon1->pos).dotProduct(outNormal) < 0)
+				outNormal *= -1.0f;
+
 			return true;
 		}
 
@@ -189,6 +185,144 @@ bool epa(phy::RigidShape* polygon1, phy::RigidShape* polygon2, std::vector<phy::
 }
 
 
+struct Edge {
+	phy::vec3 v1, v2;
+};
+
+
+std::vector<phy::vec3> clipEdge(
+    phy::RigidShape* polyA,
+    phy::RigidShape* polyB,
+    phy::vec3 normal)
+{
+    const float EPS = 1e-4f;
+
+    struct Edge { phy::vec3 v1, v2; };
+
+    auto getWorldVertex = [](phy::RigidShape* p, int i) {
+        return p->pos + p->vertices[i].rotate(p->getRotation());
+    };
+
+    // -----------------------------
+    // Find best edge (reference/incident)
+    // -----------------------------
+    auto findBestEdge = [&](phy::RigidShape* poly, const phy::vec3& n) {
+        int count = poly->vertices.size();
+
+        // 1. Find support vertex
+        float maxDot = -INFINITY;
+        int index = 0;
+        for (int i = 0; i < count; i++) {
+            auto v = getWorldVertex(poly, i);
+            float d = v.dotProduct(n);
+            if (d > maxDot) {
+                maxDot = d;
+                index = i;
+            }
+        }
+
+        // 2. Get adjacent vertices
+        int prev = (index - 1 + count) % count;
+        int next = (index + 1) % count;
+
+        auto v = getWorldVertex(poly, index);
+        auto vPrev = getWorldVertex(poly, prev);
+        auto vNext = getWorldVertex(poly, next);
+
+        // 3. Edges
+        auto e1 = (v - vPrev).normalize();
+        auto e2 = (vNext - v).normalize();
+
+        // 4. Normals
+        phy::vec3 n1 = e1.perp(1).normalize();
+        phy::vec3 n2 = e2.perp(1).normalize();
+
+        // 5. Choose edge most aligned with normal
+        if (n1.dotProduct(n) > n2.dotProduct(n))
+            return Edge{ vPrev, v };
+        else
+            return Edge{ v, vNext };
+    };
+
+    // -----------------------------
+    // Get edges
+    // -----------------------------
+    Edge edgeA = findBestEdge(polyA, normal);
+    Edge edgeB = findBestEdge(polyB, normal * -1.0f);
+
+    // -----------------------------
+    // Decide reference vs incident
+    // -----------------------------
+    auto edgeDirA = (edgeA.v2 - edgeA.v1).normalize();
+    auto edgeDirB = (edgeB.v2 - edgeB.v1).normalize();
+
+    phy::vec3 normalA = edgeDirA.perp(1).normalize();
+    phy::vec3 normalB = edgeDirB.perp(1).normalize();
+
+    Edge refEdge, incEdge;
+
+    if (std::abs(normalA.dotProduct(normal)) >= std::abs(normalB.dotProduct(normal))) {
+        refEdge = edgeA;
+        incEdge = edgeB;
+    } else {
+        refEdge = edgeB;
+        incEdge = edgeA;
+        normal *= -1.0f;
+    }
+
+    // -----------------------------
+    // Clipping helper
+    // -----------------------------
+    auto clip = [](const phy::vec3& n, float c, std::vector<phy::vec3>& face) {
+        std::vector<phy::vec3> out;
+
+        float d1 = n.dotProduct(face[0]) - c;
+        float d2 = n.dotProduct(face[1]) - c;
+
+        if (d1 >= 0) out.push_back(face[0]);
+        if (d2 >= 0) out.push_back(face[1]);
+
+        if (d1 * d2 < 0) {
+            float t = d1 / (d1 - d2);
+            out.push_back(face[0] + (face[1] - face[0]) * t);
+        }
+
+        return out;
+    };
+
+    // -----------------------------
+    // Start clipping
+    // -----------------------------
+    std::vector<phy::vec3> incident = { incEdge.v1, incEdge.v2 };
+
+    phy::vec3 refDir = (refEdge.v2 - refEdge.v1).normalize();
+
+    // Side planes
+    float c1 = refDir.dotProduct(refEdge.v1);
+    float c2 = (refDir * -1.0f).dotProduct(refEdge.v2);
+
+    auto cp1 = clip(refDir, c1, incident);
+    if (cp1.empty()) return {};
+
+    auto cp2 = clip(refDir * -1.0f, c2, cp1);
+    if (cp2.empty()) return {};
+
+    // -----------------------------
+    // Final contact points
+    // -----------------------------
+    std::vector<phy::vec3> contacts;
+
+    float refC = normal.dotProduct(refEdge.v1);
+
+    for (auto& p : cp2) {
+        float separation = normal.dotProduct(p) - refC;
+        if (separation <= EPS) {
+            contacts.push_back(p);
+        }
+    }
+
+    return contacts;
+}
 
 
 void render(SDL_Renderer* renderer)
@@ -216,11 +350,21 @@ void render(SDL_Renderer* renderer)
 		}
 	}
 
+	SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+	for(auto& point: contactPoints) {
+		std::cout << contactPoints.size() << std::endl;
+		drawFilledCircle(renderer, point.x, point.y, 5);
+	}
+
+	contactPoints.clear();
+
 }
 
 
 void update(float dt, SDL_Renderer* renderer)
 {
+	contactPoints.clear();
+
 	if(bodies.empty()) return;
 	selectedBody = &(*bodies[selected % bodies.size()]);
 	collisionInfos.clear();
@@ -236,6 +380,7 @@ void update(float dt, SDL_Renderer* renderer)
 					phy::vec3 normal;
 					float depth;
 					if(epa(poly1, poly2, simplex, normal, depth)) {
+						contactPoints = clipEdge(poly1, poly2, normal);
 						auto displ = normal * depth;
 						auto staticDispl = 0.5f;
 						if(poly1->isStatic && !poly2->isStatic) {
@@ -306,7 +451,7 @@ int main()
 		return -1;
 	}
 
-	auto window = SDL_CreateWindow("GJK Collision Shapes", W, H, 0);
+	auto window = SDL_CreateWindow("GJK Edge Clipping", W, H, 0);
 	if (!window)
 	{
 		SDL_Log("WINDOW_CREATION_FAILED: %s", SDL_GetError());
